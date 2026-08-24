@@ -1,0 +1,20 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Attendees collection: public can read and create attendance records
+    match /attendees/{attendeeId} {
+      allow read, create, update, delete: if true;
+    }
+
+    // Events collection: public can read event configuration, updates allowed
+    match /events/{eventId} {
+      allow read, create, update, delete: if true;
+    }
+
+    // Admin users collection: for admin authentication and password updates
+    match /admin_users/{userId} {
+      allow read, create, update, delete: if true;
+    }
+  }
+}

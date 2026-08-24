@@ -1,0 +1,48 @@
+{
+  "entities": {
+    "Attendee": {
+      "collection": "attendees",
+      "fields": {
+        "id": { "type": "string", "required": true },
+        "eventId": { "type": "string", "required": true },
+        "nip": { "type": "string", "required": true },
+        "nama": { "type": "string", "required": true },
+        "unitKerja": { "type": "string", "required": true },
+        "jabatan": { "type": "string", "required": true },
+        "timestamp": { "type": "string", "required": true },
+        "timeFormatted": { "type": "string", "required": true },
+        "dateFormatted": { "type": "string", "required": true },
+        "signatureDataUrl": { "type": "string", "required": false },
+        "isSyncedToSheets": { "type": "boolean", "required": false },
+        "syncedAt": { "type": "string", "required": false }
+      }
+    },
+    "Event": {
+      "collection": "events",
+      "fields": {
+        "id": { "type": "string", "required": true },
+        "name": { "type": "string", "required": true },
+        "description": { "type": "string", "required": false },
+        "date": { "type": "string", "required": true },
+        "startTime": { "type": "string", "required": false },
+        "endTime": { "type": "string", "required": false },
+        "locationName": { "type": "string", "required": true },
+        "organizer": { "type": "string", "required": false },
+        "picName": { "type": "string", "required": false },
+        "picNip": { "type": "string", "required": false },
+        "spreadsheetId": { "type": "string", "required": false },
+        "spreadsheetUrl": { "type": "string", "required": false },
+        "sheetName": { "type": "string", "required": false }
+      }
+    },
+    "AdminUser": {
+      "collection": "admin_users",
+      "fields": {
+        "username": { "type": "string", "required": true },
+        "password": { "type": "string", "required": true },
+        "role": { "type": "string", "required": true },
+        "updatedAt": { "type": "string", "required": false }
+      }
+    }
+  }
+}
