@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { AttendeeRecord, EventConfig, PDFExportOptions } from '../types';
+import { SAMARINDA_LOGO_BASE64 } from '../data/logoSamarindaBase64';
 
 export async function generateAttendancePDF(
   attendees: AttendeeRecord[],
@@ -60,20 +61,26 @@ export async function generateAttendancePDF(
   const pageWidth = doc.internal.pageSize.getWidth();
 
   // 1. Official Kop Surat Header
+  try {
+    doc.addImage(SAMARINDA_LOGO_BASE64, 'PNG', 14, 11, 15, 16);
+  } catch (err) {
+    console.warn('Could not draw logo in PDF header:', err);
+  }
+
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   doc.setTextColor(20, 35, 75);
-  doc.text(options.institutionName.toUpperCase(), pageWidth / 2, 16, { align: 'center' });
+  doc.text(options.institutionName.toUpperCase(), pageWidth / 2 + 6, 16, { align: 'center' });
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
   doc.setTextColor(30, 41, 59);
-  doc.text(options.subHeader.toUpperCase(), pageWidth / 2, 21, { align: 'center' });
+  doc.text(options.subHeader.toUpperCase(), pageWidth / 2 + 6, 21, { align: 'center' });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(100, 116, 139);
-  doc.text(options.addressHeader, pageWidth / 2, 26, { align: 'center' });
+  doc.text(options.addressHeader, pageWidth / 2 + 6, 26, { align: 'center' });
 
   // Double Line Separator
   doc.setDrawColor(20, 35, 75);

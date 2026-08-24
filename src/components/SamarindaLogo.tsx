@@ -1,4 +1,5 @@
 import React from 'react';
+import { SAMARINDA_LOGO_BASE64 } from '../data/logoSamarindaBase64';
 
 interface SamarindaLogoProps {
   className?: string;
@@ -18,10 +19,9 @@ export const SamarindaLogo: React.FC<SamarindaLogoProps> = ({
       title="Lambang Pemerintah Kota Samarinda"
     >
       <img
-        src="/Logo_Kota_Samarinda.png"
+        src={SAMARINDA_LOGO_BASE64}
         alt="Lambang Kota Samarinda"
         className="w-full h-full object-contain drop-shadow-xs"
-        referrerPolicy="no-referrer"
       />
     </div>
   );
