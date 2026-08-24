@@ -7,7 +7,7 @@ export async function generateAttendancePDF(
   event: EventConfig,
   options: PDFExportOptions
 ) {
-  // Preload all signature images into memory so Firebase Storage URLs & dataUrls render properly in jsPDF
+  // Preload all signature images into memory so all data URLs render properly in jsPDF
   const loadedSignatures = new Map<string, string>();
 
   await Promise.all(
@@ -15,14 +15,14 @@ export async function generateAttendancePDF(
       if (!att.signatureDataUrl) return;
 
       if (
-        att.signatureDataUrl.startsWith('data:image/png') ||
-        att.signatureDataUrl.startsWith('data:image/jpeg')
+        att.signatureDataUrl.startsWith('data:image/jpeg') ||
+        att.signatureDataUrl.startsWith('data:image/png')
       ) {
         loadedSignatures.set(att.id, att.signatureDataUrl);
         return;
       }
 
-      // If remote URL (e.g. Firebase Storage)
+      // If SVG data URI or remote URL, draw to offscreen canvas
       try {
         const img = new Image();
         img.crossOrigin = 'anonymous';
@@ -104,7 +104,7 @@ export async function generateAttendancePDF(
   doc.setFont('helvetica', 'bold');
   doc.text('Hari / Tanggal', 18, 53);
   doc.setFont('helvetica', 'normal');
-  doc.text(`: ${options.eventDate} | Pukul: ${event.startTime} - ${event.endTime} WITA`, 46, 53);
+  doc.text(`: ${options.eventDate} | Pukul: ${event.startTime || '08:30'} - ${event.endTime || 'Selesai'} WITA`, 46, 53);
 
   doc.setFont('helvetica', 'bold');
   doc.text('Tempat', 18, 58);
@@ -168,11 +168,12 @@ export async function generateAttendancePDF(
         const signatureUrl = attendee ? loadedSignatures.get(attendee.id) : null;
         if (signatureUrl) {
           try {
+            const format = signatureUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
             const imgWidth = 14;
             const imgHeight = 9;
             const posX = data.cell.x + (data.cell.width - imgWidth) / 2;
             const posY = data.cell.y + (data.cell.height - imgHeight) / 2;
-            doc.addImage(signatureUrl, 'JPEG', posX, posY, imgWidth, imgHeight);
+            doc.addImage(signatureUrl, format, posX, posY, imgWidth, imgHeight);
           } catch (e) {
             doc.setFontSize(7);
             doc.setTextColor(100, 116, 139);
@@ -218,6 +219,6 @@ export async function generateAttendancePDF(
   doc.text(`NIP. ${options.picNip}`, signBlockX, currentY + 32);
 
   // Save PDF
-  const cleanFileName = `Daftar_Hadir_${event.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_${event.date}.pdf`;
+  const cleanFileName = `Daftar_Hadir_${options.eventName.replace(/[^a-zA-Z0-9_-]/g, '_')}_${options.eventDate}.pdf`;
   doc.save(cleanFileName);
 }

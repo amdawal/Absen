@@ -181,6 +181,54 @@ export async function updateEventConfig(event: EventConfig): Promise<void> {
 }
 
 /**
+ * Fetch latest event configuration directly from Firestore.
+ */
+export async function getLatestEventConfig(
+  eventId: string = DEFAULT_EVENT_ID
+): Promise<EventConfig> {
+  try {
+    const eventRef = doc(db, EVENTS_COLLECTION, eventId);
+    const snapshot = await getDoc(eventRef);
+    if (snapshot.exists()) {
+      return { id: snapshot.id, ...snapshot.data() } as EventConfig;
+    }
+  } catch (err) {
+    console.warn('Error fetching latest event config:', err);
+  }
+  return DEFAULT_EVENT;
+}
+
+/**
+ * Fetch ALL attendee records directly from Firestore in chronological order (timestamp asc)
+ * without any pagination limit, ensuring complete and up-to-date reports.
+ */
+export async function getAllAttendeesForReport(
+  eventId: string = DEFAULT_EVENT_ID
+): Promise<AttendeeRecord[]> {
+  try {
+    const attendeesRef = collection(db, ATTENDEES_COLLECTION);
+    const q = query(attendeesRef, orderBy('timestamp', 'asc'));
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) {
+      return [];
+    }
+
+    const records: AttendeeRecord[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data() as AttendeeRecord;
+      if (!data.eventId || data.eventId === eventId) {
+        records.push({ id: docSnap.id, ...data });
+      }
+    });
+    return records;
+  } catch (err) {
+    console.error('Error fetching all attendees for report:', err);
+    return [];
+  }
+}
+
+/**
  * Subscribe in real-time to the attendees list from Firebase Firestore with limit(50).
  */
 export function subscribeToAttendees(
