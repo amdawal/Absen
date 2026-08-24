@@ -129,13 +129,13 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
           <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs sm:text-sm text-slate-600 space-y-1.5">
             <div className="flex items-center gap-1.5 font-bold text-slate-800">
               <Lock className="w-4 h-4 text-blue-600" />
-              <span>Kredensial Default Akun Admin:</span>
+              <span>Kredensial Masuk Administrator:</span>
             </div>
             <p className="text-slate-600">
-              Username: <strong className="text-slate-900 font-mono text-sm">admin</strong> • Password: <strong className="text-slate-900 font-mono text-sm">admin123</strong>
+              Username: <strong className="text-slate-900 font-mono text-sm">admin</strong> • Sandi default awal: <strong className="text-slate-900 font-mono text-sm">admin123</strong>
             </p>
             <p className="text-xs text-slate-500">
-              * Password tersimpan di Firebase Firestore dan dapat diganti di menu Pengaturan.
+              * Jika kata sandi sudah pernah diubah di menu Pengaturan, gunakan kata sandi terbaru Anda. Sandi lama otomatis tidak berlaku lagi.
             </p>
           </div>
 

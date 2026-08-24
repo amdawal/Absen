@@ -17,6 +17,7 @@ const LOCAL_ADMIN_PASS_KEY = 'sipresensi_admin_pass_cache';
 
 /**
  * Initializes the default admin account in Firebase Firestore if not already present.
+ * Does NOT overwrite existing password if document already exists.
  */
 export async function ensureDefaultAdmin(): Promise<void> {
   try {
@@ -24,7 +25,7 @@ export async function ensureDefaultAdmin(): Promise<void> {
     const snap = await getDoc(adminRef);
     if (!snap.exists()) {
       await setDoc(adminRef, {
-        username: 'admin',
+        username: DEFAULT_ADMIN_ID,
         password: DEFAULT_PASSWORD,
         role: 'admin',
         createdAt: new Date().toISOString(),
@@ -33,117 +34,97 @@ export async function ensureDefaultAdmin(): Promise<void> {
       console.log('Default admin account initialized in Firebase Firestore');
     }
   } catch (error) {
-    // Offline or network error during startup is expected and safe to ignore
+    // Network or offline error during startup
     console.warn('Note on Firestore admin sync:', error);
   }
 }
 
 /**
- * Authenticate admin with username & password from Firebase Firestore,
- * with seamless fallback if client/network is offline or initial connection is pending.
+ * Authenticate admin with username & password against Firebase Firestore.
+ * Always validates against the live database record as primary source of truth.
  */
 export async function authenticateAdmin(
   usernameInput: string,
   passwordInput: string
 ): Promise<{ success: boolean; error?: string; user?: AdminUser }> {
   const cleanUsername = usernameInput.trim().toLowerCase();
-  const cachedPassword = localStorage.getItem(LOCAL_ADMIN_PASS_KEY) || DEFAULT_PASSWORD;
+  const cleanPassword = passwordInput.trim();
 
-  // 1. Check default credentials first for zero-latency / offline resilience
-  if (cleanUsername === 'admin') {
-    if (passwordInput === cachedPassword || passwordInput === DEFAULT_PASSWORD) {
-      const adminUser: AdminUser = {
-        username: 'admin',
-        role: 'admin',
-        lastLogin: new Date().toISOString(),
-      };
-      sessionStorage.setItem(SESSION_KEY, JSON.stringify(adminUser));
-
-      // Attempt background Firestore sync for lastLogin if online
-      try {
-        const adminRef = doc(db, ADMIN_COLLECTION, 'admin');
-        updateDoc(adminRef, { lastLogin: new Date().toISOString() }).catch(() => {});
-      } catch (e) {
-        // Safe ignore
-      }
-
-      return { success: true, user: adminUser };
-    }
+  if (!cleanUsername || !cleanPassword) {
+    return { success: false, error: 'Username dan kata sandi wajib diisi.' };
   }
 
-  // 2. Query Firebase Firestore
+  // 1. Query Firebase Firestore for the live credentials
   try {
     const adminRef = doc(db, ADMIN_COLLECTION, cleanUsername);
-    const fetchDocPromise = getDoc(adminRef);
-    
-    // Timeout safeguard after 3 seconds
-    const snap = await Promise.race([
-      fetchDocPromise,
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
-    ]);
+    const snap = await getDoc(adminRef);
 
-    if (!snap) {
-      // If Firestore timed out or is offline
-      if (cleanUsername === 'admin' && (passwordInput === cachedPassword || passwordInput === DEFAULT_PASSWORD)) {
-        const adminUser: AdminUser = {
-          username: 'admin',
-          role: 'admin',
-          lastLogin: new Date().toISOString(),
-        };
-        sessionStorage.setItem(SESSION_KEY, JSON.stringify(adminUser));
-        return { success: true, user: adminUser };
+    if (snap && snap.exists()) {
+      const data = snap.data() as AdminUser;
+      const dbPassword = data.password || '';
+
+      // Verify exact password match from Firestore
+      if (dbPassword !== cleanPassword) {
+        return { success: false, error: 'Kata sandi / password admin salah.' };
       }
-      return { success: false, error: 'Koneksi database sedang lambat atau offline. Silakan coba lagi.' };
-    }
 
-    if (!snap.exists()) {
-      // If document does not exist and username is admin, check default
-      if (cleanUsername === 'admin' && (passwordInput === DEFAULT_PASSWORD || passwordInput === cachedPassword)) {
-        ensureDefaultAdmin().catch(() => {});
-        const adminUser: AdminUser = {
-          username: 'admin',
-          role: 'admin',
-          lastLogin: new Date().toISOString(),
-        };
-        sessionStorage.setItem(SESSION_KEY, JSON.stringify(adminUser));
-        return { success: true, user: adminUser };
-      }
-      return { success: false, error: 'Username admin tidak ditemukan.' };
-    }
+      // Successful authentication with Firestore
+      // Update local storage cache to the verified password
+      localStorage.setItem(LOCAL_ADMIN_PASS_KEY, dbPassword);
 
-    const data = snap.data() as AdminUser;
-    if (data.password !== passwordInput) {
-      return { success: false, error: 'Kata sandi / password admin salah.' };
-    }
+      // Record last login timestamp (non-blocking)
+      updateDoc(adminRef, {
+        lastLogin: new Date().toISOString(),
+      }).catch(() => {});
 
-    // Cache updated password locally for offline resilience
-    localStorage.setItem(LOCAL_ADMIN_PASS_KEY, data.password);
-
-    // Update last login in Firestore (non-blocking)
-    updateDoc(adminRef, {
-      lastLogin: new Date().toISOString(),
-    }).catch(() => {});
-
-    const adminUser: AdminUser = {
-      username: data.username,
-      role: data.role || 'admin',
-      lastLogin: new Date().toISOString(),
-    };
-
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(adminUser));
-    return { success: true, user: adminUser };
-  } catch (error: any) {
-    console.warn('Admin authentication fallback triggered:', error);
-
-    // Fallback check if error was "client is offline" or network error
-    if (cleanUsername === 'admin' && (passwordInput === cachedPassword || passwordInput === DEFAULT_PASSWORD)) {
       const adminUser: AdminUser = {
-        username: 'admin',
-        role: 'admin',
+        username: data.username || cleanUsername,
+        role: data.role || 'admin',
         lastLogin: new Date().toISOString(),
       };
+
       sessionStorage.setItem(SESSION_KEY, JSON.stringify(adminUser));
       return { success: true, user: adminUser };
+    }
+
+    // If document does NOT exist in Firestore
+    if (cleanUsername === DEFAULT_ADMIN_ID) {
+      // Check if entering default password for initial bootstrap
+      if (cleanPassword === DEFAULT_PASSWORD) {
+        // Create the admin doc in Firestore
+        ensureDefaultAdmin().catch(() => {});
+        localStorage.setItem(LOCAL_ADMIN_PASS_KEY, DEFAULT_PASSWORD);
+
+        const adminUser: AdminUser = {
+          username: DEFAULT_ADMIN_ID,
+          role: 'admin',
+          lastLogin: new Date().toISOString(),
+        };
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify(adminUser));
+        return { success: true, user: adminUser };
+      } else {
+        return { success: false, error: 'Kata sandi / password admin salah.' };
+      }
+    }
+
+    return { success: false, error: 'Username admin tidak ditemukan.' };
+  } catch (error: any) {
+    console.warn('Firestore admin fetch failed, checking offline fallback:', error);
+
+    // Fallback for offline mode ONLY if Firestore cannot be reached
+    const cachedPassword = localStorage.getItem(LOCAL_ADMIN_PASS_KEY);
+
+    if (cleanUsername === DEFAULT_ADMIN_ID) {
+      const effectivePass = cachedPassword || DEFAULT_PASSWORD;
+      if (cleanPassword === effectivePass) {
+        const adminUser: AdminUser = {
+          username: DEFAULT_ADMIN_ID,
+          role: 'admin',
+          lastLogin: new Date().toISOString(),
+        };
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify(adminUser));
+        return { success: true, user: adminUser };
+      }
     }
 
     return {
@@ -154,50 +135,82 @@ export async function authenticateAdmin(
 }
 
 /**
- * Change admin password stored in Firebase Firestore and locally.
+ * Change admin password stored in Firebase Firestore and local cache.
+ * Strictly verifies the current password against Firestore before updating.
  */
 export async function changeAdminPassword(
   usernameInput: string,
-  currentPassword: string,
-  newPassword: string
+  currentPasswordInput: string,
+  newPasswordInput: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const cleanUsername = usernameInput.trim().toLowerCase();
-    const cachedPassword = localStorage.getItem(LOCAL_ADMIN_PASS_KEY) || DEFAULT_PASSWORD;
+    const currentPassword = currentPasswordInput.trim();
+    const newPassword = newPasswordInput.trim();
+
+    if (!cleanUsername) {
+      return { success: false, error: 'Username admin tidak valid' };
+    }
 
     if (newPassword.length < 5) {
       return { success: false, error: 'Kata sandi baru minimal 5 karakter' };
     }
 
-    // Verify current password
-    if (currentPassword !== cachedPassword && currentPassword !== DEFAULT_PASSWORD) {
-      return { success: false, error: 'Kata sandi saat ini tidak cocok' };
+    if (currentPassword === newPassword) {
+      return { success: false, error: 'Kata sandi baru tidak boleh sama dengan kata sandi lama' };
     }
 
-    // Save locally
+    // 1. Fetch current credential from Firebase Firestore
+    const adminRef = doc(db, ADMIN_COLLECTION, cleanUsername);
+    const snap = await getDoc(adminRef);
+
+    if (snap.exists()) {
+      const data = snap.data() as AdminUser;
+      const livePassword = data.password || '';
+
+      if (livePassword !== currentPassword) {
+        return { success: false, error: 'Kata sandi saat ini tidak cocok / salah.' };
+      }
+    } else {
+      // Document not yet created in Firestore, check against DEFAULT_PASSWORD
+      if (cleanUsername === DEFAULT_ADMIN_ID) {
+        if (currentPassword !== DEFAULT_PASSWORD) {
+          return { success: false, error: 'Kata sandi saat ini tidak cocok / salah.' };
+        }
+      } else {
+        return { success: false, error: 'Akun admin tidak ditemukan di database.' };
+      }
+    }
+
+    // 2. Persist new password to Firebase Firestore
+    await setDoc(
+      adminRef,
+      {
+        username: cleanUsername,
+        password: newPassword,
+        role: 'admin',
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+
+    // 3. Update local cache immediately
     localStorage.setItem(LOCAL_ADMIN_PASS_KEY, newPassword);
 
-    // Save to Firestore
-    try {
-      const adminRef = doc(db, ADMIN_COLLECTION, cleanUsername);
-      await setDoc(
-        adminRef,
-        {
-          username: cleanUsername,
-          password: newPassword,
-          role: 'admin',
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true }
-      );
-    } catch (e) {
-      console.warn('Firestore password update queued/saved locally:', e);
+    // 4. Update session storage if current user is logged in
+    const activeSession = getActiveAdminSession();
+    if (activeSession && activeSession.username === cleanUsername) {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(activeSession));
     }
 
+    console.log(`Password for admin "${cleanUsername}" updated successfully in Firestore.`);
     return { success: true };
   } catch (error: any) {
-    console.error('Error changing admin password:', error);
-    return { success: false, error: error.message || 'Gagal memperbarui kata sandi' };
+    console.error('Error changing admin password in Firestore:', error);
+    return {
+      success: false,
+      error: error.message || 'Gagal memperbarui kata sandi di Firebase Firestore.',
+    };
   }
 }
 
@@ -217,9 +230,8 @@ export function getActiveAdminSession(): AdminUser | null {
 }
 
 /**
- * Logout admin session.
+ * Logout admin session and clear session.
  */
 export function logoutAdminSession(): void {
   sessionStorage.removeItem(SESSION_KEY);
 }
-
