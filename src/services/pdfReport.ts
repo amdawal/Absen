@@ -116,23 +116,25 @@ export async function generateAttendancePDF(
     index + 1,
     att.nip,
     att.nama,
+    att.gender === 'Perempuan' ? 'P' : att.gender === 'Laki-laki' ? 'L' : '-',
+    att.phone || '-',
     att.unitKerja,
     att.jabatan,
-    att.timeFormatted,
     '', // Placeholder for signature rendering
   ]);
 
   autoTable(doc, {
     startY: 68,
-    margin: { left: 14, right: 14 },
+    margin: { left: 12, right: 12 },
     head: [
       [
         'No',
         'NIP Pegawai',
         'Nama Lengkap',
+        'L/P',
+        'No. HP',
         'Unit Kerja / OPD',
         'Jabatan',
-        'Waktu',
         'Tanda Tangan',
       ],
     ],
@@ -141,29 +143,30 @@ export async function generateAttendancePDF(
     headStyles: {
       fillColor: [30, 58, 138], // Dark Blue
       textColor: 255,
-      fontSize: 8.5,
+      fontSize: 8,
       fontStyle: 'bold',
       halign: 'center',
       valign: 'middle',
     },
     bodyStyles: {
-      fontSize: 8,
+      fontSize: 7.5,
       textColor: [30, 41, 59],
       valign: 'middle',
-      minCellHeight: 14,
+      minCellHeight: 13,
     },
     columnStyles: {
-      0: { cellWidth: 9, halign: 'center' },
-      1: { cellWidth: 32, font: 'courier', fontSize: 7.5 },
-      2: { cellWidth: 42, fontStyle: 'bold' },
-      3: { cellWidth: 40 },
-      4: { cellWidth: 26 },
-      5: { cellWidth: 16, halign: 'center', fontSize: 7 },
-      6: { cellWidth: 17, halign: 'center' },
+      0: { cellWidth: 8, halign: 'center' },
+      1: { cellWidth: 28, font: 'courier', fontSize: 7 },
+      2: { cellWidth: 36, fontStyle: 'bold' },
+      3: { cellWidth: 10, halign: 'center' },
+      4: { cellWidth: 24, fontSize: 7 },
+      5: { cellWidth: 36 },
+      6: { cellWidth: 26 },
+      7: { cellWidth: 18, halign: 'center' },
     },
     didDrawCell: (data) => {
-      // Draw signature image if in column 6 and it's a body cell
-      if (data.section === 'body' && data.column.index === 6) {
+      // Draw signature image if in column 7 and it's a body cell
+      if (data.section === 'body' && data.column.index === 7) {
         const attendee = attendees[data.row.index];
         const signatureUrl = attendee ? loadedSignatures.get(attendee.id) : null;
         if (signatureUrl) {

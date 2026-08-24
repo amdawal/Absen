@@ -74,6 +74,8 @@ export async function createAttendanceSpreadsheet(event: EventConfig): Promise<{
                   { userEnteredValue: { stringValue: 'Tanggal' }, userEnteredFormat: { textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } }, backgroundColor: { red: 0.12, green: 0.35, blue: 0.7 } } },
                   { userEnteredValue: { stringValue: 'NIP Pegawai' }, userEnteredFormat: { textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } }, backgroundColor: { red: 0.12, green: 0.35, blue: 0.7 } } },
                   { userEnteredValue: { stringValue: 'Nama Lengkap' }, userEnteredFormat: { textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } }, backgroundColor: { red: 0.12, green: 0.35, blue: 0.7 } } },
+                  { userEnteredValue: { stringValue: 'Jenis Kelamin' }, userEnteredFormat: { textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } }, backgroundColor: { red: 0.12, green: 0.35, blue: 0.7 } } },
+                  { userEnteredValue: { stringValue: 'No. HP / WA' }, userEnteredFormat: { textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } }, backgroundColor: { red: 0.12, green: 0.35, blue: 0.7 } } },
                   { userEnteredValue: { stringValue: 'Unit Kerja / OPD' }, userEnteredFormat: { textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } }, backgroundColor: { red: 0.12, green: 0.35, blue: 0.7 } } },
                   { userEnteredValue: { stringValue: 'Jabatan' }, userEnteredFormat: { textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } }, backgroundColor: { red: 0.12, green: 0.35, blue: 0.7 } } },
                   { userEnteredValue: { stringValue: 'Tanda Tangan Digital' }, userEnteredFormat: { textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } }, backgroundColor: { red: 0.12, green: 0.35, blue: 0.7 } } },
@@ -119,13 +121,15 @@ export async function appendAttendeeToSheets(
   const token = await getAccessToken();
   if (!token) return false;
 
-  const range = 'Rekap Presensi!A:I';
+  const range = 'Rekap Presensi!A:K';
   const rowValues = [
     indexNum,
     record.timeFormatted,
     record.dateFormatted,
     `'${record.nip}`, // leading apostrophe to prevent scientific notation in Excel/Sheets
     record.nama,
+    record.gender || '-',
+    record.phone ? `'${record.phone}` : '-',
     record.unitKerja,
     record.jabatan,
     'Tervalidasi Digital',
@@ -166,13 +170,15 @@ export async function batchAppendAttendees(
   const token = await getAccessToken();
   if (!token || records.length === 0) return { success: false, count: 0 };
 
-  const range = 'Rekap Presensi!A:I';
+  const range = 'Rekap Presensi!A:K';
   const rows = records.map((record, i) => [
     startIndex + i,
     record.timeFormatted,
     record.dateFormatted,
     `'${record.nip}`,
     record.nama,
+    record.gender || '-',
+    record.phone ? `'${record.phone}` : '-',
     record.unitKerja,
     record.jabatan,
     'Tervalidasi Digital',

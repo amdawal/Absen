@@ -13,6 +13,7 @@ import { AttendeeRecord, EventConfig } from '../types';
 import { addAttendeeRecord } from '../services/storage';
 import { SignatureCanvas, SignatureCanvasHandle } from './SignatureCanvas';
 import { UnitKerjaCombobox } from './UnitKerjaCombobox';
+import { SamarindaLogo } from './SamarindaLogo';
 
 interface PresenceFormProps {
   event: EventConfig;
@@ -24,6 +25,8 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
   const [nama, setNama] = useState('');
   const [unitKerja, setUnitKerja] = useState('');
   const [jabatan, setJabatan] = useState('');
+  const [phone, setPhone] = useState('');
+  const [gender, setGender] = useState<'Laki-laki' | 'Perempuan' | ''>('');
   const [signatureDataUrl, setSignatureDataUrl] = useState('');
   const signatureRef = useRef<SignatureCanvasHandle | null>(null);
 
@@ -48,6 +51,10 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
     }
     if (!nama.trim()) {
       setFormError('Nama Lengkap & Gelar wajib diisi.');
+      return;
+    }
+    if (!gender) {
+      setFormError('Silakan pilih Jenis Kelamin (Laki-laki / Perempuan).');
       return;
     }
     if (!unitKerja.trim()) {
@@ -87,6 +94,8 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
         nama: nama.trim(),
         unitKerja: unitKerja.trim(),
         jabatan: jabatan.trim(),
+        phone: phone.trim(),
+        gender: gender || 'Laki-laki',
         timestamp: now.toISOString(),
         timeFormatted,
         dateFormatted,
@@ -102,6 +111,8 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
       setNama('');
       setUnitKerja('');
       setJabatan('');
+      setPhone('');
+      setGender('');
       setSignatureDataUrl('');
       if (signatureRef.current) {
         signatureRef.current.clear();
@@ -128,34 +139,43 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
       >
         <div className="absolute -right-8 -bottom-8 w-52 h-52 bg-blue-500/10 rounded-full blur-2xl pointer-events-none" />
 
-        <div className="flex flex-wrap items-center gap-2.5 mb-3.5">
-          {/* Status Badge: Aktif / Tidak Aktif */}
-          {isEventActive ? (
-            <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs sm:text-sm font-bold shadow-xs">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              Kegiatan Aktif • Presensi Terbuka
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs sm:text-sm font-bold shadow-xs">
-              <span className="w-2 h-2 rounded-full bg-amber-400" />
-              Kegiatan Tidak Aktif • Presensi Ditutup
-            </span>
-          )}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5 mb-4">
+          {/* Logo Kota Samarinda at the top-left corner */}
+          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white/95 backdrop-blur-sm p-1.5 shrink-0 flex items-center justify-center shadow-lg border border-white/30">
+            <SamarindaLogo className="w-full h-full" />
+          </div>
 
-          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-200 text-xs sm:text-sm font-bold">
-            <Calendar className="w-4 h-4 text-blue-300" />
-            {event.date} • {event.startTime || '08:30'} - {event.endTime || '12:00'} WITA
-          </span>
+          <div className="flex-1 min-w-0 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Status Badge: Aktif / Tidak Aktif */}
+              {isEventActive ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-bold shadow-xs">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  Kegiatan Aktif • Presensi Terbuka
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs font-bold shadow-xs">
+                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  Kegiatan Tidak Aktif • Presensi Ditutup
+                </span>
+              )}
 
-          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/10 border border-white/20 text-slate-200 text-xs sm:text-sm font-bold">
-            <UserCheck className="w-4 h-4 text-emerald-400" />
-            Pemerintah Kota Samarinda
-          </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-200 text-xs font-bold">
+                <Calendar className="w-3.5 h-3.5 text-blue-300" />
+                {event.date} • {event.startTime || '08:30'} - {event.endTime || '12:00'} WITA
+              </span>
+
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/20 text-slate-200 text-xs font-bold">
+                <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
+                Pemerintah Kota Samarinda
+              </span>
+            </div>
+
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-white leading-tight tracking-tight">
+              {event.name}
+            </h1>
+          </div>
         </div>
-
-        <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-white leading-tight tracking-tight">
-          {event.name}
-        </h1>
 
         {event.description && (
           <p className="text-xs sm:text-sm text-slate-300 mt-2 line-clamp-2 leading-relaxed">
@@ -246,6 +266,58 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
                 value={nama}
                 onChange={(e) => setNama(e.target.value)}
                 placeholder="Nama lengkap beserta gelar"
+                className="w-full px-4 py-3 sm:py-3.5 text-sm sm:text-base font-medium bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:border-blue-600 focus:ring-3 focus:ring-blue-100 focus:outline-hidden transition text-slate-900 placeholder:text-slate-400 disabled:opacity-60 disabled:cursor-not-allowed"
+              />
+            </div>
+          </div>
+
+          {/* Jenis Kelamin & Nomor HP */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            {/* Jenis Kelamin */}
+            <div>
+              <label className="block text-sm sm:text-base font-bold text-slate-800 mb-2">
+                Jenis Kelamin <span className="text-rose-500">*</span>
+              </label>
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  disabled={!isEventActive}
+                  onClick={() => setGender('Laki-laki')}
+                  className={`flex items-center justify-center gap-2 py-3 px-3.5 rounded-2xl border text-sm sm:text-base font-bold transition ${
+                    gender === 'Laki-laki'
+                      ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
+                      : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
+                  }`}
+                >
+                  <span>👨</span> Laki-laki
+                </button>
+                <button
+                  type="button"
+                  disabled={!isEventActive}
+                  onClick={() => setGender('Perempuan')}
+                  className={`flex items-center justify-center gap-2 py-3 px-3.5 rounded-2xl border text-sm sm:text-base font-bold transition ${
+                    gender === 'Perempuan'
+                      ? 'bg-pink-600 border-pink-600 text-white shadow-xs'
+                      : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
+                  }`}
+                >
+                  <span>👩</span> Perempuan
+                </button>
+              </div>
+            </div>
+
+            {/* Nomor HP / WhatsApp */}
+            <div>
+              <label className="block text-sm sm:text-base font-bold text-slate-800 mb-2">
+                Nomor HP / WhatsApp <span className="text-xs font-normal text-slate-500">(Opsional)</span>
+              </label>
+              <input
+                type="tel"
+                id="input-phone"
+                disabled={!isEventActive}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="Contoh: 081234567890"
                 className="w-full px-4 py-3 sm:py-3.5 text-sm sm:text-base font-medium bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:border-blue-600 focus:ring-3 focus:ring-blue-100 focus:outline-hidden transition text-slate-900 placeholder:text-slate-400 disabled:opacity-60 disabled:cursor-not-allowed"
               />
             </div>

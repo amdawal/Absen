@@ -193,6 +193,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       'Tanggal',
       'NIP',
       'Nama Lengkap',
+      'Jenis Kelamin',
+      'No. HP / WA',
       'Unit Kerja',
       'Jabatan',
       'Status Sinkronisasi Sheets',
@@ -205,6 +207,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       `"${r.dateFormatted}"`,
       `"'${r.nip}"`,
       `"${r.nama}"`,
+      `"${r.gender || '-'}"`,
+      `"${r.phone ? `'${r.phone}` : '-'}"`,
       `"${r.unitKerja}"`,
       `"${r.jabatan}"`,
       `"${r.isSyncedToSheets ? 'Tersinkron' : 'Pending'}"`,
@@ -468,6 +472,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider">
                 <th className="py-3.5 px-4 text-center w-12">No</th>
                 <th className="py-3.5 px-4">Pegawai & NIP</th>
+                <th className="py-3.5 px-4">Gender & Kontak</th>
                 <th className="py-3.5 px-4">Unit Kerja (OPD)</th>
                 <th className="py-3.5 px-4">Jabatan</th>
                 <th className="py-3.5 px-4">Waktu Hadir</th>
@@ -479,7 +484,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <tbody className="divide-y divide-slate-100">
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-400">
+                  <td colSpan={9} className="py-12 text-center text-slate-400">
                     <Users className="w-8 h-8 mx-auto mb-2 opacity-40" />
                     <p className="font-semibold text-slate-600">Belum ada data kehadiran yang sesuai</p>
                     <p className="text-[11px] text-slate-400 mt-0.5">
@@ -498,6 +503,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <td className="py-3 px-4">
                       <div className="font-bold text-slate-900">{record.nama}</div>
                       <div className="text-[11px] font-mono text-slate-500">NIP. {record.nip}</div>
+                    </td>
+
+                    {/* Gender & Kontak */}
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-1 text-slate-800 font-medium">
+                        {record.gender === 'Perempuan' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-pink-100 text-pink-700">
+                            👩 Perempuan
+                          </span>
+                        ) : record.gender === 'Laki-laki' ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-100 text-blue-700">
+                            👨 Laki-laki
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-[11px]">-</span>
+                        )}
+                      </div>
+                      {record.phone && (
+                        <div className="text-[11px] font-mono text-slate-600 mt-0.5">
+                          📞 {record.phone}
+                        </div>
+                      )}
                     </td>
 
                     {/* Unit Kerja */}
@@ -624,6 +651,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
 
             <div className="space-y-2 text-xs text-slate-700 bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Jenis Kelamin:</span>
+                <span className="font-semibold">{selectedRecord.gender || '-'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">No. HP / WhatsApp:</span>
+                <span className="font-semibold">{selectedRecord.phone || '-'}</span>
+              </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Unit Kerja:</span>
                 <span className="font-semibold">{selectedRecord.unitKerja}</span>

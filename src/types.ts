@@ -5,6 +5,8 @@ export interface AttendeeRecord {
   nama: string;
   unitKerja: string;
   jabatan: string;
+  phone?: string;
+  gender?: 'Laki-laki' | 'Perempuan' | string;
   timestamp: string; // ISO string
   timeFormatted: string; // e.g. "08:15:30 WITA"
   dateFormatted: string; // e.g. "24 Agustus 2026"

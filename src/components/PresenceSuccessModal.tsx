@@ -76,6 +76,20 @@ export const PresenceSuccessModal: React.FC<PresenceSuccessModalProps> = ({
             <span className="font-mono font-bold text-slate-800">{record.nip}</span>
           </div>
 
+          <div className="flex justify-between items-center">
+            <span className="text-slate-500 font-medium">Jenis Kelamin:</span>
+            <span className="font-bold text-slate-800">
+              {record.gender === 'Perempuan' ? '👩 Perempuan' : '👨 Laki-laki'}
+            </span>
+          </div>
+
+          {record.phone && (
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500 font-medium">No. HP / WA:</span>
+              <span className="font-mono font-bold text-slate-800">{record.phone}</span>
+            </div>
+          )}
+
           <div className="flex justify-between items-start">
             <span className="text-slate-500 font-medium">Unit Kerja:</span>
             <span className="font-bold text-slate-800 text-right max-w-[260px]">{record.unitKerja}</span>

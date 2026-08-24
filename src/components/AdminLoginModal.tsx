@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Lock, User, KeyRound, AlertCircle, X, ArrowRight } from 'lucide-react';
+import { ShieldCheck, User, KeyRound, AlertCircle, X, ArrowRight } from 'lucide-react';
 import { authenticateAdmin, AdminUser } from '../services/adminAuth';
 
 interface AdminLoginModalProps {
@@ -13,7 +13,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   onClose,
   onLoginSuccess,
 }) => {
-  const [username, setUsername] = useState('admin');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -39,6 +39,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
       if (res.success && res.user) {
         onLoginSuccess(res.user);
         setPassword('');
+        setUsername('');
         onClose();
       } else {
         setErrorMessage(res.error || 'Autentikasi admin gagal');
@@ -101,7 +102,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Username admin"
+                placeholder="Masukkan username admin"
                 className="w-full pl-11 pr-4 py-3 text-sm sm:text-base bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 focus:outline-hidden font-medium text-slate-900"
               />
             </div>
@@ -123,20 +124,6 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                 className="w-full pl-11 pr-4 py-3 text-sm sm:text-base bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 focus:outline-hidden text-slate-900"
               />
             </div>
-          </div>
-
-          {/* Helper info */}
-          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs sm:text-sm text-slate-600 space-y-1.5">
-            <div className="flex items-center gap-1.5 font-bold text-slate-800">
-              <Lock className="w-4 h-4 text-blue-600" />
-              <span>Kredensial Masuk Administrator:</span>
-            </div>
-            <p className="text-slate-600">
-              Username: <strong className="text-slate-900 font-mono text-sm">admin</strong> • Sandi default awal: <strong className="text-slate-900 font-mono text-sm">admin123</strong>
-            </p>
-            <p className="text-xs text-slate-500">
-              * Jika kata sandi sudah pernah diubah di menu Pengaturan, gunakan kata sandi terbaru Anda. Sandi lama otomatis tidak berlaku lagi.
-            </p>
           </div>
 
           <div className="flex gap-2.5 pt-2">
