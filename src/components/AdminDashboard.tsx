@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   FileText,
   Download,
@@ -17,9 +17,18 @@ import {
   Sparkles,
   CheckCircle2,
   FileSpreadsheet,
+  Layers,
+  CheckCircle,
 } from 'lucide-react';
 import { AttendeeRecord, EventConfig } from '../types';
-import { syncOfflineAttendees, deleteAttendeeRecord } from '../services/storage';
+import {
+  syncOfflineAttendees,
+  deleteAttendeeRecord,
+  getAllEvents,
+  subscribeToAllEvents,
+  subscribeToAttendees,
+  setActiveEventIdInDb,
+} from '../services/storage';
 import { PDFExportModal } from './PDFExportModal';
 
 interface AdminDashboardProps {
@@ -39,24 +48,78 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onLoadMore,
   hasMore,
 }) => {
+  const [allEvents, setAllEvents] = useState<EventConfig[]>([event]);
+  const [selectedEventId, setSelectedEventId] = useState<string>(event.id);
+  const [currentEvent, setCurrentEvent] = useState<EventConfig>(event);
+  const [eventAttendees, setEventAttendees] = useState<AttendeeRecord[]>(attendees);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUnit, setSelectedUnit] = useState('Semua');
+  const [selectedDate, setSelectedDate] = useState('Semua Tanggal');
   const [isPDFModalOpen, setIsPDFModalOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<AttendeeRecord | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
-  // Filter attendees for this event
-  const eventAttendees = attendees.filter((a) => a.eventId === event.id);
+  // Subscribe to all events
+  useEffect(() => {
+    const unsub = subscribeToAllEvents((evts) => {
+      setAllEvents(evts);
+      const match = evts.find((e) => e.id === selectedEventId) || evts.find((e) => e.id === event.id) || evts[0];
+      if (match) {
+        setCurrentEvent(match);
+      }
+    });
+    return () => unsub();
+  }, [selectedEventId, event.id]);
 
-  // Summary Metrics
-  const totalCount = eventAttendees.length;
-  const uniqueUnitsCount = new Set(eventAttendees.map((a) => a.unitKerja)).size;
-  const signatureCount = eventAttendees.filter((a) => a.signatureDataUrl).length;
-  const syncedCount = eventAttendees.filter((a) => a.isSyncedToSheets).length;
-  const pendingOfflineCount = eventAttendees.filter((a) => !a.isSyncedToSheets).length;
+  // Subscribe to attendees of selected event
+  useEffect(() => {
+    if (selectedEventId === event.id) {
+      setEventAttendees(attendees.filter((a) => a.eventId === event.id));
+    } else {
+      const unsubAtt = subscribeToAttendees(
+        selectedEventId,
+        (records) => {
+          setEventAttendees(records);
+        },
+        100
+      );
+      return () => unsubAtt();
+    }
+  }, [selectedEventId, event.id, attendees]);
 
-  // Filtered List
+  // Handle Event selection change
+  const handleEventChange = (newId: string) => {
+    setSelectedEventId(newId);
+    setSelectedDate('Semua Tanggal');
+    const match = allEvents.find((e) => e.id === newId);
+    if (match) {
+      setCurrentEvent(match);
+    }
+  };
+
+  const handleMakeActiveEvent = async () => {
+    try {
+      await setActiveEventIdInDb(currentEvent.id);
+      setSyncMessage(`"${currentEvent.name}" telah diaktifkan untuk formulir publik.`);
+      setTimeout(() => setSyncMessage(null), 4000);
+    } catch (e: any) {
+      alert(`Gagal mengaktifkan kegiatan: ${e.message}`);
+    }
+  };
+
+  // Extract distinct dates for date filter
+  const distinctDates = new Set<string>();
+  if (currentEvent.date) distinctDates.add(currentEvent.date);
+  eventAttendees.forEach((r) => {
+    if (r.timestamp) {
+      distinctDates.add(r.timestamp.split('T')[0]);
+    }
+  });
+  const dateOptions = ['Semua Tanggal', ...Array.from(distinctDates).sort().reverse()];
+
+  // Filter attendees by search, unit, and date
   const filteredList = eventAttendees.filter((rec) => {
     const matchSearch =
       rec.nama.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -66,14 +129,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     const matchUnit = selectedUnit === 'Semua' || rec.unitKerja === selectedUnit;
 
-    return matchSearch && matchUnit;
+    let matchDate = true;
+    if (selectedDate !== 'Semua Tanggal') {
+      const recIso = rec.timestamp ? rec.timestamp.split('T')[0] : '';
+      const recFormatted = rec.dateFormatted || '';
+      matchDate = recIso === selectedDate || recFormatted.includes(selectedDate);
+    }
+
+    return matchSearch && matchUnit && matchDate;
   });
+
+  // Metrics based on current event
+  const totalCount = eventAttendees.length;
+  const uniqueUnitsCount = new Set(eventAttendees.map((a) => a.unitKerja)).size;
+  const signatureCount = eventAttendees.filter((a) => a.signatureDataUrl).length;
+  const syncedCount = eventAttendees.filter((a) => a.isSyncedToSheets).length;
+  const pendingOfflineCount = eventAttendees.filter((a) => !a.isSyncedToSheets).length;
 
   const uniqueUnits = ['Semua', ...Array.from(new Set(eventAttendees.map((a) => a.unitKerja)))];
 
   const handleManualSync = async () => {
-    if (!event.spreadsheetId) {
-      alert('Google Spreadsheet belum ditautkan. Silakan hubungkan spreadsheet di tab Pengaturan.');
+    if (!currentEvent.spreadsheetId) {
+      alert('Google Spreadsheet belum ditautkan untuk kegiatan ini. Silakan hubungkan di tab Pengaturan.');
       onOpenSettings();
       return;
     }
@@ -81,7 +158,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     setIsSyncing(true);
     setSyncMessage(null);
     try {
-      const res = await syncOfflineAttendees(event, attendees);
+      const res = await syncOfflineAttendees(currentEvent, eventAttendees);
       if (res.error) {
         setSyncMessage(`Peringatan: ${res.error}`);
       } else {
@@ -111,6 +188,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (filteredList.length === 0) return;
     const headers = [
       'ID Presensi',
+      'Kegiatan',
       'Waktu Presensi',
       'Tanggal',
       'NIP',
@@ -122,6 +200,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
     const rows = filteredList.map((r) => [
       `"${r.id}"`,
+      `"${currentEvent.name}"`,
       `"${r.timeFormatted}"`,
       `"${r.dateFormatted}"`,
       `"'${r.nip}"`,
@@ -136,32 +215,76 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Rekap_Presensi_${event.name.replace(/[^a-zA-Z0-9_-]/g, '_')}.csv`);
+    link.setAttribute('download', `Rekap_Presensi_${currentEvent.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_${selectedDate.replace(/[^a-zA-Z0-9_-]/g, '_')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
+  const isCurrentActive = currentEvent.id === event.id || currentEvent.isActive;
+
   return (
     <div className="w-full space-y-6" id="admin-dashboard-container">
-      {/* Top Banner & Quick Actions */}
+      {/* Top Banner with Event Selector & Quick Actions */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
+        <div className="space-y-2 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 text-[11px] font-bold uppercase tracking-wider">
               Rekap & Laporan Admin
             </span>
-            <span className="text-xs text-slate-400">• {event.date}</span>
+            {isCurrentActive ? (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 text-[10px] font-extrabold">
+                <CheckCircle className="w-3 h-3 text-emerald-600" />
+                Formulir Presensi Aktif
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={handleMakeActiveEvent}
+                className="px-2.5 py-0.5 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 text-[10px] font-bold transition cursor-pointer"
+                title="Aktifkan kegiatan ini untuk form presensi publik"
+              >
+                Aktifkan di Form Presensi
+              </button>
+            )}
           </div>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900 leading-tight">
-            Rekapitulasi Kehadiran Peserta
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            {event.name}
+
+          {/* Event Selector Dropdown */}
+          <div className="pt-1">
+            <label className="block text-[11px] font-bold text-slate-500 mb-1">
+              Pilih Kegiatan untuk Ditinjau / Dicetak:
+            </label>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <select
+                id="select-admin-event"
+                value={selectedEventId}
+                onChange={(e) => handleEventChange(e.target.value)}
+                className="px-3.5 py-2 text-sm font-extrabold text-slate-900 bg-slate-50 border border-slate-300 rounded-xl focus:outline-hidden focus:border-blue-600 focus:bg-white max-w-xl"
+              >
+                {allEvents.map((evt) => (
+                  <option key={evt.id} value={evt.id}>
+                    {evt.name} ({evt.date})
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="text-xs text-blue-600 hover:text-blue-800 font-bold underline px-1 cursor-pointer"
+              >
+                + Kelola Kegiatan di Pengaturan
+              </button>
+            </div>
+          </div>
+
+          <p className="text-xs text-slate-500 flex items-center gap-2 pt-0.5">
+            <span>📅 {currentEvent.date} ({currentEvent.startTime} - {currentEvent.endTime} WITA)</span>
+            <span>•</span>
+            <span>📍 {currentEvent.locationName}</span>
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
           <button
             type="button"
             id="btn-open-pdf-modal"
@@ -172,9 +295,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             Cetak Laporan PDF
           </button>
 
-          {event.spreadsheetUrl ? (
+          {currentEvent.spreadsheetUrl ? (
             <a
-              href={event.spreadsheetUrl}
+              href={currentEvent.spreadsheetUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 px-3.5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-semibold text-xs rounded-xl transition"
@@ -187,7 +310,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <button
               type="button"
               onClick={onOpenSettings}
-              className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition"
+              className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition cursor-pointer"
             >
               <CloudOff className="w-4 h-4 text-slate-500" />
               Tautkan Sheets
@@ -198,7 +321,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             type="button"
             onClick={handleManualSync}
             disabled={isSyncing}
-            className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs rounded-xl transition disabled:opacity-50"
+            className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold text-xs rounded-xl transition disabled:opacity-50 cursor-pointer"
             title="Sinkronkan data offline ke Google Sheets"
           >
             <RefreshCw className={`w-4 h-4 text-blue-600 ${isSyncing ? 'animate-spin' : ''}`} />
@@ -208,7 +331,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           <button
             type="button"
             onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs rounded-xl transition"
+            className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs rounded-xl transition cursor-pointer"
             title="Ekspor CSV"
           >
             <Download className="w-4 h-4" />
@@ -288,9 +411,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="bg-white rounded-2xl p-4 border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="relative w-full sm:w-80">
+      {/* Filter and Search Bar (Search, Unit Filter, and Date Filter) */}
+      <div className="bg-white rounded-2xl p-4 border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-3">
+        <div className="relative w-full md:w-80">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
@@ -302,14 +425,30 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+          {/* Date Filter */}
+          <div className="flex items-center gap-1.5 text-xs text-slate-600">
+            <Calendar className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+            <select
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="px-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden"
+            >
+              {dateOptions.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Unit Kerja Filter */}
-          <div className="flex items-center gap-1.5 text-xs text-slate-600 w-full sm:w-auto">
+          <div className="flex items-center gap-1.5 text-xs text-slate-600">
             <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
             <select
               value={selectedUnit}
               onChange={(e) => setSelectedUnit(e.target.value)}
-              className="w-full sm:w-64 px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden"
+              className="px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden"
             >
               {uniqueUnits.map((unit) => (
                 <option key={unit} value={unit}>
@@ -344,7 +483,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <Users className="w-8 h-8 mx-auto mb-2 opacity-40" />
                     <p className="font-semibold text-slate-600">Belum ada data kehadiran yang sesuai</p>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      Gunakan formulir presensi untuk mencatat kehadiran peserta kegiatan.
+                      Pilih tanggal atau kegiatan lain, atau isi form presensi untuk menambahkan peserta.
                     </p>
                   </td>
                 </tr>
@@ -383,7 +522,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <button
                           type="button"
                           onClick={() => setSelectedRecord(record)}
-                          className="inline-block p-1 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-lg transition"
+                          className="inline-block p-1 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-lg transition cursor-pointer"
                           title="Klik untuk memperbesar tanda tangan"
                         >
                           <img
@@ -424,7 +563,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <button
                           type="button"
                           onClick={() => setSelectedRecord(record)}
-                          className="p-1.5 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                          className="p-1.5 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition cursor-pointer"
                           title="Lihat Rincian Presensi"
                         >
                           <Eye className="w-3.5 h-3.5" />
@@ -432,7 +571,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         <button
                           type="button"
                           onClick={() => handleDeleteRecord(record.id)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
                           title="Hapus Catatan"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -478,7 +617,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <button
                 type="button"
                 onClick={() => setSelectedRecord(null)}
-                className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500"
+                className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 cursor-pointer"
               >
                 ✕
               </button>
@@ -525,7 +664,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <button
                 type="button"
                 onClick={() => setSelectedRecord(null)}
-                className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition"
+                className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition cursor-pointer"
               >
                 Tutup
               </button>
@@ -539,7 +678,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         isOpen={isPDFModalOpen}
         onClose={() => setIsPDFModalOpen(false)}
         attendees={eventAttendees}
-        event={event}
+        event={currentEvent}
       />
     </div>
   );

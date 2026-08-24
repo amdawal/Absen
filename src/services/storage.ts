@@ -12,7 +12,6 @@ import {
   deleteDoc,
   updateDoc,
   runTransaction,
-  increment,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { AttendeeRecord, EventConfig } from '../types';
@@ -20,6 +19,8 @@ import { appendAttendeeToSheets, batchAppendAttendees } from './googleSheets';
 
 const EVENTS_COLLECTION = 'events';
 const ATTENDEES_COLLECTION = 'attendees';
+const SETTINGS_COLLECTION = 'settings';
+const APP_CONFIG_DOC = 'app_config';
 export const DEFAULT_EVENT_ID = 'event-smrd-01';
 
 // Default Initial Event in Samarinda
@@ -35,6 +36,8 @@ export const DEFAULT_EVENT: EventConfig = {
   picName: 'H. Hero Mardanus Satyawan, S.T., M.T.',
   picNip: '19700315 199603 1 004',
   sheetName: 'Rekap Presensi',
+  isActive: true,
+  createdAt: new Date().toISOString(),
 };
 
 // Default Initial Sample Attendees
@@ -141,35 +144,268 @@ export async function getNextAttendeeIndex(eventId: string): Promise<number> {
 }
 
 /**
- * Subscribe in real-time to the active event config from Firebase Firestore.
+ * Get active event ID from app config doc or localStorage
  */
-export function subscribeToActiveEvent(
-  eventId: string = DEFAULT_EVENT_ID,
-  onUpdate: (event: EventConfig) => void
+export async function getActiveEventId(): Promise<string> {
+  try {
+    const configRef = doc(db, SETTINGS_COLLECTION, APP_CONFIG_DOC);
+    const snap = await getDoc(configRef);
+    if (snap.exists() && snap.data()?.activeEventId) {
+      return snap.data().activeEventId;
+    }
+  } catch (e) {
+    console.warn('Could not read activeEventId from Firestore settings:', e);
+  }
+  return localStorage.getItem('si_presensi_active_event_id') || DEFAULT_EVENT_ID;
+}
+
+/**
+ * Set active event ID in Firestore settings and localStorage, updating isActive flag across events
+ */
+export async function setActiveEventIdInDb(eventId: string): Promise<void> {
+  await setEventActiveStatus(eventId, true);
+}
+
+/**
+ * Explicitly toggle an event's active or inactive status in Firestore
+ */
+export async function setEventActiveStatus(eventId: string, isActive: boolean): Promise<void> {
+  try {
+    const configRef = doc(db, SETTINGS_COLLECTION, APP_CONFIG_DOC);
+    const eventsRef = collection(db, EVENTS_COLLECTION);
+    const snap = await getDocs(eventsRef);
+
+    if (isActive) {
+      // 1. Update app_config to point to this event
+      await setDoc(
+        configRef,
+        { activeEventId: eventId, updatedAt: new Date().toISOString() },
+        { merge: true }
+      );
+      localStorage.setItem('si_presensi_active_event_id', eventId);
+
+      // 2. Set isActive: true for this event, and false for others
+      const updatePromises: Promise<any>[] = [];
+      snap.forEach((docSnap) => {
+        const isTarget = docSnap.id === eventId;
+        if (docSnap.data().isActive !== isTarget) {
+          updatePromises.push(updateDoc(docSnap.ref, { isActive: isTarget }));
+        }
+      });
+      await Promise.all(updatePromises);
+    } else {
+      // Deactivating this specific event
+      const targetDoc = doc(db, EVENTS_COLLECTION, eventId);
+      await updateDoc(targetDoc, { isActive: false });
+
+      // Check if this was the active event in app_config
+      const configSnap = await getDoc(configRef);
+      if (configSnap.exists() && configSnap.data()?.activeEventId === eventId) {
+        // Find if any other event is active
+        let otherActiveId: string | null = null;
+        snap.forEach((docSnap) => {
+          if (docSnap.id !== eventId && docSnap.data().isActive === true) {
+            otherActiveId = docSnap.id;
+          }
+        });
+
+        await setDoc(
+          configRef,
+          { activeEventId: otherActiveId, updatedAt: new Date().toISOString() },
+          { merge: true }
+        );
+
+        if (otherActiveId) {
+          localStorage.setItem('si_presensi_active_event_id', otherActiveId);
+        } else {
+          localStorage.removeItem('si_presensi_active_event_id');
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Error setting event active status:', err);
+    throw err;
+  }
+}
+
+/**
+ * Subscribe in real-time to all events from Firebase Firestore.
+ */
+export function subscribeToAllEvents(
+  onUpdate: (events: EventConfig[]) => void
 ) {
-  const eventRef = doc(db, EVENTS_COLLECTION, eventId);
+  const eventsRef = collection(db, EVENTS_COLLECTION);
 
   return onSnapshot(
-    eventRef,
+    eventsRef,
     async (snapshot) => {
-      if (snapshot.exists()) {
-        onUpdate({ id: snapshot.id, ...snapshot.data() } as EventConfig);
+      if (!snapshot.empty) {
+        const events: EventConfig[] = [];
+        snapshot.forEach((docSnap) => {
+          events.push({ id: docSnap.id, ...docSnap.data() } as EventConfig);
+        });
+
+        // Sort: active event first, then date desc
+        events.sort((a, b) => {
+          if (a.isActive && !b.isActive) return -1;
+          if (!a.isActive && b.isActive) return 1;
+          return (b.date || '').localeCompare(a.date || '');
+        });
+
+        onUpdate(events);
       } else {
-        // Seed default event config in Firestore
+        // Seed default initial event
         try {
-          await setDoc(eventRef, DEFAULT_EVENT);
-          onUpdate(DEFAULT_EVENT);
+          await setDoc(doc(db, EVENTS_COLLECTION, DEFAULT_EVENT.id), DEFAULT_EVENT);
+          onUpdate([DEFAULT_EVENT]);
         } catch (err) {
-          console.warn('Error creating default event in Firestore:', err);
-          onUpdate(DEFAULT_EVENT);
+          console.warn('Error seeding default event in Firestore:', err);
+          onUpdate([DEFAULT_EVENT]);
         }
       }
     },
     (error) => {
-      console.error('Firestore event subscription error:', error);
+      console.error('Firestore events subscription error:', error);
+      onUpdate([DEFAULT_EVENT]);
+    }
+  );
+}
+
+/**
+ * Fetch all events list directly from Firestore.
+ */
+export async function getAllEvents(): Promise<EventConfig[]> {
+  try {
+    const eventsRef = collection(db, EVENTS_COLLECTION);
+    const snapshot = await getDocs(eventsRef);
+    if (!snapshot.empty) {
+      const list: EventConfig[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push({ id: docSnap.id, ...docSnap.data() } as EventConfig);
+      });
+      list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      return list;
+    }
+  } catch (err) {
+    console.warn('Error fetching all events:', err);
+  }
+  return [DEFAULT_EVENT];
+}
+
+/**
+ * Create a new event and store in Firestore.
+ */
+export async function createEvent(newEvent: EventConfig): Promise<EventConfig> {
+  const eventId = newEvent.id || `event-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+  const shouldBeActive = newEvent.isActive ?? false;
+
+  const eventToSave: EventConfig = {
+    ...newEvent,
+    id: eventId,
+    createdAt: newEvent.createdAt || new Date().toISOString(),
+    isActive: shouldBeActive,
+  };
+
+  const eventRef = doc(db, EVENTS_COLLECTION, eventId);
+  await setDoc(eventRef, eventToSave);
+
+  if (shouldBeActive) {
+    await setActiveEventIdInDb(eventId);
+  }
+
+  return eventToSave;
+}
+
+/**
+ * Delete an event from Firestore.
+ */
+export async function deleteEvent(eventId: string): Promise<void> {
+  const eventRef = doc(db, EVENTS_COLLECTION, eventId);
+  await deleteDoc(eventRef);
+
+  // If deleted event was active, clean up config
+  try {
+    const configRef = doc(db, SETTINGS_COLLECTION, APP_CONFIG_DOC);
+    const snap = await getDoc(configRef);
+    if (snap.exists() && snap.data()?.activeEventId === eventId) {
+      await setDoc(configRef, { activeEventId: null, updatedAt: new Date().toISOString() }, { merge: true });
+      localStorage.removeItem('si_presensi_active_event_id');
+    }
+  } catch (e) {
+    console.warn('Error cleaning up deleted event from config:', e);
+  }
+}
+
+/**
+ * Subscribe in real-time to the active event config from Firebase Firestore.
+ * Automatically synchronizes with any event marked isActive: true or configured in app_config.
+ */
+export function subscribeToActiveEvent(
+  initialEventId: string = DEFAULT_EVENT_ID,
+  onUpdate: (event: EventConfig) => void
+) {
+  const eventsRef = collection(db, EVENTS_COLLECTION);
+  const configRef = doc(db, SETTINGS_COLLECTION, APP_CONFIG_DOC);
+
+  let activeEventId = localStorage.getItem('si_presensi_active_event_id') || initialEventId;
+
+  // Listen to both the config doc and events collection
+  const unsubscribeEvents = onSnapshot(
+    eventsRef,
+    async (snapshot) => {
+      if (!snapshot.empty) {
+        const events: EventConfig[] = [];
+        snapshot.forEach((docSnap) => {
+          events.push({ id: docSnap.id, ...docSnap.data() } as EventConfig);
+        });
+
+        // 1. Prefer event with isActive === true
+        const activeEvent = events.find((e) => e.isActive === true);
+        if (activeEvent) {
+          activeEventId = activeEvent.id;
+          localStorage.setItem('si_presensi_active_event_id', activeEvent.id);
+          onUpdate(activeEvent);
+          return;
+        }
+
+        // 2. If no event has isActive === true, look for matching activeEventId
+        const matchConfig = events.find((e) => e.id === activeEventId);
+        if (matchConfig) {
+          onUpdate(matchConfig);
+          return;
+        }
+
+        // 3. Fallback to first available event (marked with its actual isActive status)
+        if (events.length > 0) {
+          onUpdate(events[0]);
+          return;
+        }
+      }
+
+      // 4. Default fallback if empty
+      onUpdate(DEFAULT_EVENT);
+    },
+    (error) => {
+      console.error('Firestore active event subscription error:', error);
       onUpdate(DEFAULT_EVENT);
     }
   );
+
+  const unsubscribeConfig = onSnapshot(
+    configRef,
+    (configSnap) => {
+      if (configSnap.exists() && configSnap.data()?.activeEventId) {
+        activeEventId = configSnap.data().activeEventId;
+        localStorage.setItem('si_presensi_active_event_id', activeEventId);
+      }
+    },
+    () => {}
+  );
+
+  return () => {
+    unsubscribeEvents();
+    unsubscribeConfig();
+  };
 }
 
 /**
@@ -200,10 +436,11 @@ export async function getLatestEventConfig(
 
 /**
  * Fetch ALL attendee records directly from Firestore in chronological order (timestamp asc)
- * without any pagination limit, ensuring complete and up-to-date reports.
+ * without any pagination limit, filterable by eventId and optional date, ensuring complete and up-to-date reports.
  */
 export async function getAllAttendeesForReport(
-  eventId: string = DEFAULT_EVENT_ID
+  eventId?: string,
+  eventDate?: string
 ): Promise<AttendeeRecord[]> {
   try {
     const attendeesRef = collection(db, ATTENDEES_COLLECTION);
@@ -217,13 +454,41 @@ export async function getAllAttendeesForReport(
     const records: AttendeeRecord[] = [];
     snapshot.forEach((docSnap) => {
       const data = docSnap.data() as AttendeeRecord;
-      if (!data.eventId || data.eventId === eventId) {
+      const matchEvent = !eventId || eventId === 'all' || data.eventId === eventId;
+      
+      // Check date match if provided
+      let matchDate = true;
+      if (eventDate && eventDate !== 'all' && eventDate !== 'Semua Tanggal') {
+        const recordIsoDate = data.timestamp ? data.timestamp.split('T')[0] : '';
+        const recordFormatted = data.dateFormatted || '';
+        matchDate = recordIsoDate === eventDate || recordFormatted.includes(eventDate);
+      }
+
+      if (matchEvent && matchDate) {
         records.push({ id: docSnap.id, ...data });
       }
     });
     return records;
   } catch (err) {
     console.error('Error fetching all attendees for report:', err);
+    return [];
+  }
+}
+
+/**
+ * Get distinct dates for an event's attendees
+ */
+export async function getDistinctAttendeeDates(eventId?: string): Promise<string[]> {
+  try {
+    const records = await getAllAttendeesForReport(eventId);
+    const dates = new Set<string>();
+    records.forEach((r) => {
+      if (r.timestamp) {
+        dates.add(r.timestamp.split('T')[0]);
+      }
+    });
+    return Array.from(dates).sort().reverse();
+  } catch (err) {
     return [];
   }
 }

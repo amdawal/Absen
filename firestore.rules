@@ -16,5 +16,15 @@ service cloud.firestore {
     match /admin_users/{userId} {
       allow read, create, update, delete: if true;
     }
+
+    // Settings collection: for global application config and active event
+    match /settings/{settingId} {
+      allow read, write: if true;
+    }
+
+    // Counters collection: for atomic presence sequential indexing
+    match /counters/{counterId} {
+      allow read, write: if true;
+    }
   }
 }

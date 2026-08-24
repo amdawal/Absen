@@ -1,6 +1,6 @@
 {
   "name": "Presensi Kegiatan QR Code",
-  "description": "Aplikasi presensi kehadiran kegiatan terintegrasi Google Sheets dengan tanda tangan digital, searchable combobox 40 unit kerja Kota Samarinda, laporan PDF resmi, dan mode offline.",
+  "description": "Aplikasi presensi kehadiran kegiatan multi-acara Pemerintah Kota Samarinda dengan manajemen kegiatan di Firestore, filter cetak PDF berbasis kegiatan & tanggal acara, integrasi Google Sheets otomatis, tanda tangan digital, dan mode offline.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

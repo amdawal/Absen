@@ -30,9 +30,16 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
+  const isEventActive = event.isActive !== false;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
+
+    if (!isEventActive) {
+      setFormError('Kegiatan ini berstatus Tidak Aktif. Presensi kehadiran saat ini sedang ditutup.');
+      return;
+    }
 
     // Validation
     if (!nip.trim()) {
@@ -110,16 +117,37 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
 
   return (
     <div className="w-full max-w-3xl mx-auto space-y-6" id="presence-form-container">
-      {/* Event Header Banner Card with Large Clear Typography */}
-      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-blue-800/40 relative overflow-hidden">
+      {/* Event Header Banner Card with Large Clear Typography following the Active Event */}
+      <div
+        className={`text-white rounded-3xl p-6 sm:p-8 shadow-xl border relative overflow-hidden transition-all ${
+          isEventActive
+            ? 'bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 border-blue-800/40'
+            : 'bg-gradient-to-r from-slate-800 via-slate-900 to-slate-950 border-slate-700/60'
+        }`}
+        id="presence-event-header-card"
+      >
         <div className="absolute -right-8 -bottom-8 w-52 h-52 bg-blue-500/10 rounded-full blur-2xl pointer-events-none" />
 
         <div className="flex flex-wrap items-center gap-2.5 mb-3.5">
+          {/* Status Badge: Aktif / Tidak Aktif */}
+          {isEventActive ? (
+            <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs sm:text-sm font-bold shadow-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              Kegiatan Aktif • Presensi Terbuka
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-xs sm:text-sm font-bold shadow-xs">
+              <span className="w-2 h-2 rounded-full bg-amber-400" />
+              Kegiatan Tidak Aktif • Presensi Ditutup
+            </span>
+          )}
+
           <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-200 text-xs sm:text-sm font-bold">
             <Calendar className="w-4 h-4 text-blue-300" />
-            {event.date} • {event.startTime} - {event.endTime} WITA
+            {event.date} • {event.startTime || '08:30'} - {event.endTime || '12:00'} WITA
           </span>
-          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs sm:text-sm font-bold">
+
+          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/10 border border-white/20 text-slate-200 text-xs sm:text-sm font-bold">
             <UserCheck className="w-4 h-4 text-emerald-400" />
             Pemerintah Kota Samarinda
           </span>
@@ -129,10 +157,16 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
           {event.name}
         </h1>
 
+        {event.description && (
+          <p className="text-xs sm:text-sm text-slate-300 mt-2 line-clamp-2 leading-relaxed">
+            {event.description}
+          </p>
+        )}
+
         <div className="mt-4 pt-3.5 border-t border-white/15 flex flex-wrap items-center gap-y-2 gap-x-6 text-sm sm:text-base text-slate-200 font-medium">
           <span className="flex items-center gap-2">
             <Building className="w-4 h-4 text-blue-400 shrink-0" />
-            {event.organizer}
+            {event.organizer || 'Sekretariat Daerah Kota Samarinda'}
           </span>
           <span className="flex items-center gap-2">
             <MapPin className="w-4 h-4 text-rose-400 shrink-0" />
@@ -140,6 +174,20 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
           </span>
         </div>
       </div>
+
+      {/* Inactive Notice Banner if event is paused / closed */}
+      {!isEventActive && (
+        <div className="p-4 sm:p-5 bg-amber-50 border-2 border-amber-300 rounded-3xl text-amber-900 text-sm flex items-start gap-3.5 shadow-sm">
+          <AlertTriangle className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-bold text-base">Presensi Sedang Ditutup (Kegiatan Tidak Aktif)</p>
+            <p className="text-xs sm:text-sm text-amber-800 leading-relaxed">
+              Formulir daftar hadir untuk kegiatan ini sedang dinonaktifkan oleh panitia pelaksana.
+              Silakan hubungi administrator atau panitia pelaksana untuk mengaktifkan kembali formulir presensi.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Main Form Box with Large Text & Generous Padding */}
       <form
@@ -160,7 +208,7 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
           <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-sm flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
             <div>
-              <p className="font-bold">Mohon Lengkapi Data</p>
+              <p className="font-bold">Perhatian</p>
               <p className="mt-0.5">{formError}</p>
             </div>
           </div>
@@ -177,10 +225,11 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
                 type="text"
                 id="input-nip"
                 required
+                disabled={!isEventActive}
                 value={nip}
                 onChange={(e) => setNip(e.target.value)}
                 placeholder="Contoh: 19850712 201001 1 005"
-                className="w-full px-4 py-3 sm:py-3.5 text-sm sm:text-base font-mono bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:border-blue-600 focus:ring-3 focus:ring-blue-100 focus:outline-hidden transition text-slate-900 placeholder:text-slate-400"
+                className="w-full px-4 py-3 sm:py-3.5 text-sm sm:text-base font-mono bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:border-blue-600 focus:ring-3 focus:ring-blue-100 focus:outline-hidden transition text-slate-900 placeholder:text-slate-400 disabled:opacity-60 disabled:cursor-not-allowed"
               />
             </div>
 
@@ -193,10 +242,11 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
                 type="text"
                 id="input-nama"
                 required
+                disabled={!isEventActive}
                 value={nama}
                 onChange={(e) => setNama(e.target.value)}
                 placeholder="Nama lengkap beserta gelar"
-                className="w-full px-4 py-3 sm:py-3.5 text-sm sm:text-base font-medium bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:border-blue-600 focus:ring-3 focus:ring-blue-100 focus:outline-hidden transition text-slate-900 placeholder:text-slate-400"
+                className="w-full px-4 py-3 sm:py-3.5 text-sm sm:text-base font-medium bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:border-blue-600 focus:ring-3 focus:ring-blue-100 focus:outline-hidden transition text-slate-900 placeholder:text-slate-400 disabled:opacity-60 disabled:cursor-not-allowed"
               />
             </div>
           </div>
@@ -219,10 +269,11 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
               type="text"
               id="input-jabatan"
               required
+              disabled={!isEventActive}
               value={jabatan}
               onChange={(e) => setJabatan(e.target.value)}
               placeholder="Contoh: Kepala Dinas / Camat / Kepala Bidang / Analis Kebijakan / Staf"
-              className="w-full px-4 py-3 sm:py-3.5 text-sm sm:text-base font-medium bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:border-blue-600 focus:ring-3 focus:ring-blue-100 focus:outline-hidden transition text-slate-900 placeholder:text-slate-400"
+              className="w-full px-4 py-3 sm:py-3.5 text-sm sm:text-base font-medium bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:border-blue-600 focus:ring-3 focus:ring-blue-100 focus:outline-hidden transition text-slate-900 placeholder:text-slate-400 disabled:opacity-60 disabled:cursor-not-allowed"
             />
           </div>
         </div>
@@ -245,14 +296,20 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
           <button
             type="submit"
             id="btn-submit-presensi"
-            disabled={isSubmitting}
-            className="w-full py-4 px-6 bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 active:from-blue-800 active:to-indigo-800 text-white text-base sm:text-lg font-black rounded-2xl shadow-xl shadow-blue-700/20 flex items-center justify-center gap-2.5 transition cursor-pointer disabled:opacity-50"
+            disabled={isSubmitting || !isEventActive}
+            className={`w-full py-4 px-6 text-base sm:text-lg font-black rounded-2xl shadow-xl flex items-center justify-center gap-2.5 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+              isEventActive
+                ? 'bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 active:from-blue-800 text-white shadow-blue-700/20'
+                : 'bg-slate-300 text-slate-600 shadow-none'
+            }`}
           >
             {isSubmitting ? (
               <>
                 <RefreshCw className="w-5 h-5 animate-spin" />
                 <span>Menyimpan Presensi...</span>
               </>
+            ) : !isEventActive ? (
+              <span>Formulir Presensi Ditutup (Kegiatan Tidak Aktif)</span>
             ) : (
               <>
                 <Send className="w-5 h-5" />
@@ -261,7 +318,9 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
             )}
           </button>
           <p className="text-xs sm:text-sm text-center text-slate-500 mt-3 font-medium">
-            Data tersimpan instan ke cloud database Firebase dan otomatis disinkronkan ke rekap Google Sheets.
+            {isEventActive
+              ? 'Data tersimpan instan ke cloud database Firebase dan otomatis disinkronkan ke rekap Google Sheets.'
+              : 'Aktifkan kegiatan ini di menu Pengaturan untuk membuka kembali pengisian presensi.'}
           </p>
         </div>
       </form>

@@ -8,7 +8,7 @@ export interface AttendeeRecord {
   timestamp: string; // ISO string
   timeFormatted: string; // e.g. "08:15:30 WITA"
   dateFormatted: string; // e.g. "24 Agustus 2026"
-  signatureDataUrl: string; // Base64 PNG
+  signatureDataUrl: string; // Base64 JPEG/PNG
   isSyncedToSheets: boolean;
   syncedAt?: string;
   syncError?: string;
@@ -28,6 +28,8 @@ export interface EventConfig {
   spreadsheetId?: string;
   spreadsheetUrl?: string;
   sheetName?: string;
+  createdAt?: string;
+  isActive?: boolean;
 }
 
 export interface PDFExportOptions {
@@ -41,4 +43,6 @@ export interface PDFExportOptions {
   picNip: string;
   picTitle: string;
   filterUnitKerja?: string;
+  selectedEventId?: string;
+  selectedDate?: string;
 }
