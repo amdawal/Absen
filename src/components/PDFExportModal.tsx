@@ -49,10 +49,10 @@ export const PDFExportModal: React.FC<PDFExportModalProps> = ({
       ? attendees
       : attendees.filter((a) => a.unitKerja === options.filterUnitKerja);
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     setIsExporting(true);
     try {
-      generateAttendancePDF(filteredAttendees, event, options);
+      await generateAttendancePDF(filteredAttendees, event, options);
     } catch (e: any) {
       alert(`Gagal membuat PDF: ${e.message}`);
     } finally {

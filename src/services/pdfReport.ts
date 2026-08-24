@@ -2,11 +2,55 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { AttendeeRecord, EventConfig, PDFExportOptions } from '../types';
 
-export function generateAttendancePDF(
+export async function generateAttendancePDF(
   attendees: AttendeeRecord[],
   event: EventConfig,
   options: PDFExportOptions
 ) {
+  // Preload all signature images into memory so Firebase Storage URLs & dataUrls render properly in jsPDF
+  const loadedSignatures = new Map<string, string>();
+
+  await Promise.all(
+    attendees.map(async (att) => {
+      if (!att.signatureDataUrl) return;
+
+      if (
+        att.signatureDataUrl.startsWith('data:image/png') ||
+        att.signatureDataUrl.startsWith('data:image/jpeg')
+      ) {
+        loadedSignatures.set(att.id, att.signatureDataUrl);
+        return;
+      }
+
+      // If remote URL (e.g. Firebase Storage)
+      try {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        await new Promise<void>((resolve) => {
+          img.onload = () => resolve();
+          img.onerror = () => resolve(); // continue gracefully
+          img.src = att.signatureDataUrl;
+        });
+
+        if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+          const offCanvas = document.createElement('canvas');
+          offCanvas.width = img.naturalWidth;
+          offCanvas.height = img.naturalHeight;
+          const offCtx = offCanvas.getContext('2d');
+          if (offCtx) {
+            offCtx.fillStyle = '#ffffff';
+            offCtx.fillRect(0, 0, offCanvas.width, offCanvas.height);
+            offCtx.drawImage(img, 0, 0);
+            const convertedDataUrl = offCanvas.toDataURL('image/jpeg', 0.8);
+            loadedSignatures.set(att.id, convertedDataUrl);
+          }
+        }
+      } catch (err) {
+        console.warn(`Could not preload signature for attendee ${att.id}:`, err);
+      }
+    })
+  );
+
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -121,15 +165,15 @@ export function generateAttendancePDF(
       // Draw signature image if in column 6 and it's a body cell
       if (data.section === 'body' && data.column.index === 6) {
         const attendee = attendees[data.row.index];
-        if (attendee && attendee.signatureDataUrl && attendee.signatureDataUrl.startsWith('data:image')) {
+        const signatureUrl = attendee ? loadedSignatures.get(attendee.id) : null;
+        if (signatureUrl) {
           try {
             const imgWidth = 14;
             const imgHeight = 9;
             const posX = data.cell.x + (data.cell.width - imgWidth) / 2;
             const posY = data.cell.y + (data.cell.height - imgHeight) / 2;
-            doc.addImage(attendee.signatureDataUrl, 'PNG', posX, posY, imgWidth, imgHeight);
+            doc.addImage(signatureUrl, 'JPEG', posX, posY, imgWidth, imgHeight);
           } catch (e) {
-            // fallback if SVG or unsupported format
             doc.setFontSize(7);
             doc.setTextColor(100, 116, 139);
             doc.text('Tervalidasi', data.cell.x + 2, data.cell.y + 7);

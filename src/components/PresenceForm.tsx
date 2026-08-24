@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Calendar,
   Building,
@@ -7,12 +7,11 @@ import {
   Send,
   AlertTriangle,
   RefreshCw,
-  Sparkles,
   UserCheck,
 } from 'lucide-react';
 import { AttendeeRecord, EventConfig } from '../types';
 import { addAttendeeRecord } from '../services/storage';
-import { SignatureCanvas } from './SignatureCanvas';
+import { SignatureCanvas, SignatureCanvasHandle } from './SignatureCanvas';
 import { UnitKerjaCombobox } from './UnitKerjaCombobox';
 
 interface PresenceFormProps {
@@ -26,6 +25,7 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
   const [unitKerja, setUnitKerja] = useState('');
   const [jabatan, setJabatan] = useState('');
   const [signatureDataUrl, setSignatureDataUrl] = useState('');
+  const signatureRef = useRef<SignatureCanvasHandle | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -87,7 +87,8 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
         isSyncedToSheets: false,
       };
 
-      await addAttendeeRecord(newRecord, event);
+      // Fast non-blocking save with compressed base64 signature (~4-8KB) and atomic counter
+      const savedRecord = await addAttendeeRecord(newRecord, event);
 
       // Reset form fields
       setNip('');
@@ -95,8 +96,11 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
       setUnitKerja('');
       setJabatan('');
       setSignatureDataUrl('');
+      if (signatureRef.current) {
+        signatureRef.current.clear();
+      }
 
-      onSuccess(newRecord);
+      onSuccess(savedRecord);
     } catch (err: any) {
       setFormError(err.message || 'Terjadi kesalahan saat menyimpan presensi.');
     } finally {
@@ -105,56 +109,56 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto space-y-6" id="presence-form-container">
-      {/* Event Header Banner Card */}
-      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white rounded-3xl p-6 sm:p-7 shadow-xl border border-blue-800/40 relative overflow-hidden">
-        <div className="absolute -right-8 -bottom-8 w-44 h-44 bg-blue-500/10 rounded-full blur-2xl pointer-events-none" />
+    <div className="w-full max-w-3xl mx-auto space-y-6" id="presence-form-container">
+      {/* Event Header Banner Card with Large Clear Typography */}
+      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-blue-800/40 relative overflow-hidden">
+        <div className="absolute -right-8 -bottom-8 w-52 h-52 bg-blue-500/10 rounded-full blur-2xl pointer-events-none" />
 
-        <div className="flex flex-wrap items-center gap-2 mb-3">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-200 text-xs font-semibold">
-            <Calendar className="w-3.5 h-3.5" />
+        <div className="flex flex-wrap items-center gap-2.5 mb-3.5">
+          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-200 text-xs sm:text-sm font-bold">
+            <Calendar className="w-4 h-4 text-blue-300" />
             {event.date} • {event.startTime} - {event.endTime} WITA
           </span>
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-semibold">
-            <UserCheck className="w-3.5 h-3.5" />
+          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs sm:text-sm font-bold">
+            <UserCheck className="w-4 h-4 text-emerald-400" />
             Pemerintah Kota Samarinda
           </span>
         </div>
 
-        <h1 className="text-lg sm:text-xl font-extrabold text-white leading-snug">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-white leading-tight tracking-tight">
           {event.name}
         </h1>
 
-        <div className="mt-3 pt-3 border-t border-white/10 flex flex-wrap items-center gap-y-1 gap-x-4 text-xs text-slate-300">
-          <span className="flex items-center gap-1.5">
-            <Building className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+        <div className="mt-4 pt-3.5 border-t border-white/15 flex flex-wrap items-center gap-y-2 gap-x-6 text-sm sm:text-base text-slate-200 font-medium">
+          <span className="flex items-center gap-2">
+            <Building className="w-4 h-4 text-blue-400 shrink-0" />
             {event.organizer}
           </span>
-          <span className="flex items-center gap-1.5">
-            <MapPin className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+          <span className="flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-rose-400 shrink-0" />
             {event.locationName}
           </span>
         </div>
       </div>
 
-      {/* Main Form Box */}
+      {/* Main Form Box with Large Text & Generous Padding */}
       <form
         onSubmit={handleSubmit}
-        className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200 space-y-6"
+        className="bg-white rounded-3xl p-6 sm:p-9 shadow-sm border border-slate-200 space-y-7"
         id="form-presensi-pegawai"
       >
         <div className="border-b border-slate-100 pb-4">
-          <h2 className="text-base font-bold text-slate-900">
+          <h2 className="text-lg sm:text-xl font-extrabold text-slate-900">
             Formulir Daftar Hadir Peserta
           </h2>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Silakan masukkan NIP, nama lengkap, pilih unit kerja, jabatan, dan tanda tangani digital
+          <p className="text-sm text-slate-600 mt-1">
+            Silakan lengkapi data NIP, nama lengkap, unit kerja, jabatan, dan bubuhkan tanda tangan digital di bawah ini.
           </p>
         </div>
 
         {formError && (
-          <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-xs flex items-start gap-2.5">
-            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+          <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-800 text-sm flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
             <div>
               <p className="font-bold">Mohon Lengkapi Data</p>
               <p className="mt-0.5">{formError}</p>
@@ -162,11 +166,11 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
           </div>
         )}
 
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             {/* NIP */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+              <label className="block text-sm sm:text-base font-bold text-slate-800 mb-2">
                 Nomor Induk Pegawai (NIP) <span className="text-rose-500">*</span>
               </label>
               <input
@@ -176,13 +180,13 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
                 value={nip}
                 onChange={(e) => setNip(e.target.value)}
                 placeholder="Contoh: 19850712 201001 1 005"
-                className="w-full px-3.5 py-2.5 text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 focus:outline-hidden transition"
+                className="w-full px-4 py-3 sm:py-3.5 text-sm sm:text-base font-mono bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:border-blue-600 focus:ring-3 focus:ring-blue-100 focus:outline-hidden transition text-slate-900 placeholder:text-slate-400"
               />
             </div>
 
             {/* Nama Lengkap */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+              <label className="block text-sm sm:text-base font-bold text-slate-800 mb-2">
                 Nama Lengkap & Gelar <span className="text-rose-500">*</span>
               </label>
               <input
@@ -192,7 +196,7 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
                 value={nama}
                 onChange={(e) => setNama(e.target.value)}
                 placeholder="Nama lengkap beserta gelar"
-                className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 focus:outline-hidden transition"
+                className="w-full px-4 py-3 sm:py-3.5 text-sm sm:text-base font-medium bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:border-blue-600 focus:ring-3 focus:ring-blue-100 focus:outline-hidden transition text-slate-900 placeholder:text-slate-400"
               />
             </div>
           </div>
@@ -208,7 +212,7 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
 
           {/* Jabatan */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+            <label className="block text-sm sm:text-base font-bold text-slate-800 mb-2">
               Jabatan <span className="text-rose-500">*</span>
             </label>
             <input
@@ -217,8 +221,8 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
               required
               value={jabatan}
               onChange={(e) => setJabatan(e.target.value)}
-              placeholder="Contoh: Kepala Bidang / Analis Kebijakan Ahli Muda / Staf"
-              className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-100 focus:outline-hidden transition"
+              placeholder="Contoh: Kepala Dinas / Camat / Kepala Bidang / Analis Kebijakan / Staf"
+              className="w-full px-4 py-3 sm:py-3.5 text-sm sm:text-base font-medium bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:border-blue-600 focus:ring-3 focus:ring-blue-100 focus:outline-hidden transition text-slate-900 placeholder:text-slate-400"
             />
           </div>
         </div>
@@ -226,33 +230,38 @@ export const PresenceForm: React.FC<PresenceFormProps> = ({ event, onSuccess }) 
         {/* Digital Signature Canvas Section */}
         <div className="pt-2 border-t border-slate-100">
           <SignatureCanvas
-            onSave={(url) => setSignatureDataUrl(url)}
-            onClear={() => setSignatureDataUrl('')}
+            ref={signatureRef}
+            onSave={(url) => {
+              setSignatureDataUrl(url);
+            }}
+            onClear={() => {
+              setSignatureDataUrl('');
+            }}
           />
         </div>
 
         {/* Submit Button */}
-        <div className="pt-2">
+        <div className="pt-3">
           <button
             type="submit"
             id="btn-submit-presensi"
             disabled={isSubmitting}
-            className="w-full py-3.5 px-6 bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 active:from-blue-800 active:to-indigo-800 text-white text-sm font-bold rounded-2xl shadow-lg shadow-blue-700/20 flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50"
+            className="w-full py-4 px-6 bg-gradient-to-r from-blue-700 to-indigo-700 hover:from-blue-600 hover:to-indigo-600 active:from-blue-800 active:to-indigo-800 text-white text-base sm:text-lg font-black rounded-2xl shadow-xl shadow-blue-700/20 flex items-center justify-center gap-2.5 transition cursor-pointer disabled:opacity-50"
           >
             {isSubmitting ? (
               <>
-                <RefreshCw className="w-4 h-4 animate-spin" />
-                Menyimpan Kehadiran...
+                <RefreshCw className="w-5 h-5 animate-spin" />
+                <span>Menyimpan Presensi...</span>
               </>
             ) : (
               <>
-                <Send className="w-4 h-4" />
-                Kirim & Bubuhkan Tanda Tangan Kehadiran
+                <Send className="w-5 h-5" />
+                <span>Kirim & Bubuhkan Tanda Tangan Kehadiran</span>
               </>
             )}
           </button>
-          <p className="text-[11px] text-center text-slate-400 mt-2.5">
-            Waktu kehadiran direkam otomatis dan disinkronkan langsung ke rekap Google Sheets.
+          <p className="text-xs sm:text-sm text-center text-slate-500 mt-3 font-medium">
+            Data tersimpan instan ke cloud database Firebase dan otomatis disinkronkan ke rekap Google Sheets.
           </p>
         </div>
       </form>

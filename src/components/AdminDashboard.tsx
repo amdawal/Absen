@@ -27,6 +27,8 @@ interface AdminDashboardProps {
   event: EventConfig;
   onRefresh: () => void;
   onOpenSettings: () => void;
+  onLoadMore?: () => void;
+  hasMore?: boolean;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -34,6 +36,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   event,
   onRefresh,
   onOpenSettings,
+  onLoadMore,
+  hasMore,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUnit, setSelectedUnit] = useState('Semua');
@@ -441,6 +445,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </tbody>
           </table>
         </div>
+
+        {onLoadMore && hasMore && (
+          <div className="p-4 bg-slate-50 border-t border-slate-200 text-center">
+            <button
+              type="button"
+              id="btn-load-more-attendees"
+              onClick={onLoadMore}
+              className="px-5 py-2 text-xs font-bold text-blue-700 bg-white border border-blue-200 hover:bg-blue-50 rounded-xl shadow-xs transition cursor-pointer"
+            >
+              Muat Lebih Banyak Data Presensi (+50)
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Single Record Detail Modal */}

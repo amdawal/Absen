@@ -26,6 +26,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'presensi' | 'admin' | 'settings'>('presensi');
   const [activeEvent, setActiveEvent] = useState<EventConfig>(DEFAULT_EVENT);
   const [attendees, setAttendees] = useState<AttendeeRecord[]>([]);
+  const [attendeesLimit, setAttendeesLimit] = useState<number>(50);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
 
@@ -51,13 +52,24 @@ export default function App() {
     return () => unsubscribeEvent();
   }, []);
 
-  // Listen to Attendees from Firebase Firestore in real-time
+  // 3. Listen to Attendees ONLY when in Admin Tab and logged in as Admin
   useEffect(() => {
-    const unsubscribeAttendees = subscribeToAttendees(activeEvent.id, (records) => {
-      setAttendees(records);
-    });
-    return () => unsubscribeAttendees();
-  }, [activeEvent.id]);
+    if (activeTab !== 'admin' || !isAdmin) {
+      return;
+    }
+
+    const unsubscribeAttendees = subscribeToAttendees(
+      activeEvent.id,
+      (records) => {
+        setAttendees(records);
+      },
+      attendeesLimit
+    );
+
+    return () => {
+      unsubscribeAttendees();
+    };
+  }, [activeTab, isAdmin, activeEvent.id, attendeesLimit]);
 
   // Listen to Google Auth state
   useEffect(() => {
@@ -165,6 +177,8 @@ export default function App() {
             event={activeEvent}
             onRefresh={() => {}}
             onOpenSettings={() => setActiveTab('settings')}
+            onLoadMore={() => setAttendeesLimit((prev) => prev + 50)}
+            hasMore={attendees.length >= attendeesLimit}
           />
         )}
 

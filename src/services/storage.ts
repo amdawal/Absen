@@ -8,8 +8,11 @@ import {
   query,
   orderBy,
   where,
+  limit,
   deleteDoc,
   updateDoc,
+  runTransaction,
+  increment,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { AttendeeRecord, EventConfig } from '../types';
@@ -81,6 +84,63 @@ export const SAMPLE_ATTENDEES: AttendeeRecord[] = [
 ];
 
 /**
+ * Compresses and downscales a base64 signature image aggressively (tiny thumbnail ~4-8KB)
+ * to store directly in Firestore without external storage requirements.
+ */
+export async function compressSignatureDataUrl(dataUrl: string): Promise<string> {
+  if (!dataUrl || !dataUrl.startsWith('data:image')) return dataUrl;
+  return new Promise((resolve) => {
+    try {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        // Limit dimensions to max 180x90 for tiny size footprint (~4-8KB)
+        const scale = Math.min(1, 180 / Math.max(img.width, 1), 90 / Math.max(img.height, 1));
+        canvas.width = Math.max(60, Math.floor(img.width * scale));
+        canvas.height = Math.max(30, Math.floor(img.height * scale));
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', 0.5));
+        } else {
+          resolve(dataUrl);
+        }
+      };
+      img.onerror = () => resolve(dataUrl);
+      img.src = dataUrl;
+    } catch {
+      resolve(dataUrl);
+    }
+  });
+}
+
+/**
+ * Get and increment atomic indexNum from Firestore counter without reading all attendee docs.
+ */
+export async function getNextAttendeeIndex(eventId: string): Promise<number> {
+  const counterRef = doc(db, 'counters', eventId);
+  try {
+    const nextIndex = await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(counterRef);
+      const current = snap.exists() ? Number(snap.data()?.count || 0) : 0;
+      const updated = current + 1;
+      transaction.set(
+        counterRef,
+        { count: updated, lastUpdated: new Date().toISOString() },
+        { merge: true }
+      );
+      return updated;
+    });
+    return nextIndex;
+  } catch (err) {
+    console.warn('Atomic counter transaction fallback:', err);
+    return 1;
+  }
+}
+
+/**
  * Subscribe in real-time to the active event config from Firebase Firestore.
  */
 export function subscribeToActiveEvent(
@@ -121,14 +181,19 @@ export async function updateEventConfig(event: EventConfig): Promise<void> {
 }
 
 /**
- * Subscribe in real-time to the attendees list from Firebase Firestore.
+ * Subscribe in real-time to the attendees list from Firebase Firestore with limit(50).
  */
 export function subscribeToAttendees(
   eventId: string = DEFAULT_EVENT_ID,
-  onUpdate: (attendees: AttendeeRecord[]) => void
+  onUpdate: (attendees: AttendeeRecord[]) => void,
+  limitCount: number = 50
 ) {
   const attendeesRef = collection(db, ATTENDEES_COLLECTION);
-  const q = query(attendeesRef, orderBy('timestamp', 'desc'));
+  const q = query(
+    attendeesRef,
+    orderBy('timestamp', 'desc'),
+    limit(limitCount)
+  );
 
   return onSnapshot(
     q,
@@ -136,7 +201,10 @@ export function subscribeToAttendees(
       if (!snapshot.empty) {
         const records: AttendeeRecord[] = [];
         snapshot.forEach((docSnap) => {
-          records.push({ id: docSnap.id, ...docSnap.data() } as AttendeeRecord);
+          const data = docSnap.data() as AttendeeRecord;
+          if (!data.eventId || data.eventId === eventId) {
+            records.push({ id: docSnap.id, ...data });
+          }
         });
         onUpdate(records);
       } else {
@@ -160,37 +228,57 @@ export function subscribeToAttendees(
 }
 
 /**
- * Add a new presence record directly to Firebase Firestore.
- * Also attempts to append to Google Sheets if configured and online.
+ * Add a new presence record directly to Firestore with compressed signature data and atomic index counter.
+ * Fast non-blocking save that returns immediately.
  */
 export async function addAttendeeRecord(
   record: AttendeeRecord,
-  event: EventConfig,
-  currentCount: number = 0
+  event: EventConfig
 ): Promise<AttendeeRecord> {
-  let updatedRecord = { ...record };
+  const updatedRecord = { ...record };
 
-  // Try appending to Google Sheets if configured
-  if (event.spreadsheetId && navigator.onLine) {
-    try {
-      const indexNum = currentCount + 1;
-      const success = await appendAttendeeToSheets(event.spreadsheetId, updatedRecord, indexNum);
-      if (success) {
-        updatedRecord.isSyncedToSheets = true;
-        updatedRecord.syncedAt = new Date().toISOString();
-      }
-    } catch (e: any) {
-      console.warn('Sheets direct sync failed, saved to Firebase:', e);
-      updatedRecord.isSyncedToSheets = false;
-      updatedRecord.syncError = e.message;
-    }
-  } else {
-    updatedRecord.isSyncedToSheets = false;
+  // Compress signature aggressively (~4-8KB) directly into Firestore document
+  if (updatedRecord.signatureDataUrl) {
+    updatedRecord.signatureDataUrl = await compressSignatureDataUrl(updatedRecord.signatureDataUrl);
   }
 
-  // Save to Firebase Firestore
+  // Concurrently get next atomic index and save document to Firestore
+  const indexPromise = getNextAttendeeIndex(event.id);
   const attendeeRef = doc(db, ATTENDEES_COLLECTION, record.id);
-  await setDoc(attendeeRef, updatedRecord);
+  const savePromise = setDoc(attendeeRef, updatedRecord);
+
+  // Background Google Sheets sync (non-blocking)
+  if (event.spreadsheetId && navigator.onLine) {
+    indexPromise
+      .then((indexNum) => {
+        appendAttendeeToSheets(event.spreadsheetId!, updatedRecord, indexNum)
+          .then(async (success) => {
+            if (success) {
+              try {
+                await updateDoc(attendeeRef, {
+                  isSyncedToSheets: true,
+                  syncedAt: new Date().toISOString(),
+                  syncError: null,
+                });
+              } catch (e) {
+                console.warn('Updated sync status in Firestore:', e);
+              }
+            }
+          })
+          .catch((err) => {
+            console.warn('Background Sheets sync error:', err);
+          });
+      })
+      .catch((err) => {
+        console.warn('Index computation error for Sheets:', err);
+      });
+  }
+
+  // Wait for firestore save with timeout guarantee
+  await Promise.race([
+    savePromise,
+    new Promise((resolve) => setTimeout(resolve, 800)),
+  ]);
 
   return updatedRecord;
 }

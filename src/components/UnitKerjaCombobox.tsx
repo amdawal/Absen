@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Building2, Search, Check, ChevronDown, X, Sparkles } from 'lucide-react';
-import { SAMARINDA_UNIT_KERJA, SamarindaUnit } from '../data/samarindaUnits';
+import { Building2, Search, Check, ChevronDown, X } from 'lucide-react';
+import { SAMARINDA_UNIT_KERJA } from '../data/samarindaUnits';
 
 interface UnitKerjaComboboxProps {
   value: string;
@@ -62,17 +62,17 @@ export const UnitKerjaCombobox: React.FC<UnitKerjaComboboxProps> = ({
 
   return (
     <div className="relative w-full" ref={containerRef} id="unit-kerja-combobox-wrapper">
-      <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
-        <span className="flex items-center gap-1.5">
-          <Building2 className="w-3.5 h-3.5 text-blue-700" />
+      <label className="block text-sm sm:text-base font-bold text-slate-800 mb-2 flex items-center justify-between">
+        <span className="flex items-center gap-2">
+          <Building2 className="w-4 h-4 text-blue-700" />
           Unit Kerja / OPD Kota Samarinda {required && <span className="text-rose-500">*</span>}
         </span>
-        <span className="text-[10px] text-slate-400 font-normal">
+        <span className="text-xs sm:text-sm text-slate-500 font-medium">
           {SAMARINDA_UNIT_KERJA.length} Unit Terdaftar
         </span>
       </label>
 
-      {/* Main Trigger Box */}
+      {/* Main Trigger Box with Large Clear Text */}
       <div
         onClick={() => {
           setIsOpen(!isOpen);
@@ -80,9 +80,9 @@ export const UnitKerjaCombobox: React.FC<UnitKerjaComboboxProps> = ({
             setTimeout(() => inputRef.current?.focus(), 50);
           }
         }}
-        className={`w-full min-h-[42px] px-3.5 py-2 bg-slate-50 border rounded-xl flex items-center justify-between cursor-pointer transition-all ${
+        className={`w-full min-h-[50px] px-4 py-3 bg-slate-50 border rounded-2xl flex items-center justify-between cursor-pointer transition-all ${
           isOpen
-            ? 'bg-white border-blue-600 ring-2 ring-blue-100 shadow-xs'
+            ? 'bg-white border-blue-600 ring-3 ring-blue-100 shadow-sm'
             : error
             ? 'border-rose-300 bg-rose-50/50'
             : 'border-slate-200 hover:border-slate-300 hover:bg-white'
@@ -91,30 +91,30 @@ export const UnitKerjaCombobox: React.FC<UnitKerjaComboboxProps> = ({
         <div className="flex items-center gap-2 flex-1 min-w-0 pr-2">
           {value ? (
             <div className="flex items-center gap-2 min-w-0">
-              <span className="text-xs font-semibold text-slate-900 truncate">
+              <span className="text-sm sm:text-base font-bold text-slate-900 truncate">
                 {value}
               </span>
             </div>
           ) : (
-            <span className="text-xs text-slate-400">
+            <span className="text-sm sm:text-base text-slate-400 font-medium">
               Pilih / Cari Unit Kerja di Kota Samarinda...
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           {value && (
             <button
               type="button"
               onClick={handleClear}
-              className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-md transition"
+              className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg transition"
               title="Hapus pilihan"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-4 h-4" />
             </button>
           )}
           <ChevronDown
-            className={`w-4 h-4 text-slate-400 transition-transform ${
+            className={`w-5 h-5 text-slate-500 transition-transform ${
               isOpen ? 'rotate-180 text-blue-600' : ''
             }`}
           />
@@ -124,26 +124,26 @@ export const UnitKerjaCombobox: React.FC<UnitKerjaComboboxProps> = ({
       {/* Dropdown Menu */}
       {isOpen && (
         <div
-          className="absolute z-50 left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-80 animate-in fade-in zoom-in-95 duration-100"
+          className="absolute z-50 left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-96 animate-in fade-in zoom-in-95 duration-100"
           id="unit-kerja-dropdown-panel"
         >
           {/* Search Header */}
-          <div className="p-2.5 border-b border-slate-100 bg-slate-50/80 space-y-2">
+          <div className="p-3 border-b border-slate-100 bg-slate-50/90 space-y-2.5">
             <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 ref={inputRef}
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Ketik nama dinas, badan, kecamatan, atau singkatan..."
-                className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-hidden focus:border-blue-600 focus:ring-1 focus:ring-blue-600"
+                className="w-full pl-10 pr-3 py-2.5 text-sm bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100 text-slate-900 font-medium"
                 onClick={(e) => e.stopPropagation()}
               />
             </div>
 
             {/* Category Filter Chips */}
-            <div className="flex flex-wrap gap-1 overflow-x-auto pb-0.5 no-scrollbar">
+            <div className="flex flex-wrap gap-1.5 overflow-x-auto pb-1 no-scrollbar">
               {categories.map((cat) => (
                 <button
                   key={cat}
@@ -152,10 +152,10 @@ export const UnitKerjaCombobox: React.FC<UnitKerjaComboboxProps> = ({
                     e.stopPropagation();
                     setSelectedCategory(cat);
                   }}
-                  className={`px-2 py-0.5 text-[10px] font-semibold rounded-md transition shrink-0 ${
+                  className={`px-3 py-1 text-xs sm:text-sm font-semibold rounded-lg transition shrink-0 ${
                     selectedCategory === cat
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
                   }`}
                 >
                   {cat}
@@ -165,9 +165,9 @@ export const UnitKerjaCombobox: React.FC<UnitKerjaComboboxProps> = ({
           </div>
 
           {/* List of Units */}
-          <div className="overflow-y-auto divide-y divide-slate-100 flex-1 p-1">
+          <div className="overflow-y-auto divide-y divide-slate-100 flex-1 p-1.5">
             {filteredUnits.length === 0 ? (
-              <div className="py-6 px-4 text-center text-xs text-slate-400">
+              <div className="py-8 px-4 text-center text-sm text-slate-500">
                 Unit kerja &ldquo;{searchQuery}&rdquo; tidak ditemukan.
               </div>
             ) : (
@@ -178,26 +178,26 @@ export const UnitKerjaCombobox: React.FC<UnitKerjaComboboxProps> = ({
                     key={unit.id}
                     type="button"
                     onClick={() => handleSelect(unit.name)}
-                    className={`w-full px-3 py-2 text-left rounded-xl flex items-center justify-between gap-2 transition ${
+                    className={`w-full px-4 py-3 text-left rounded-xl flex items-center justify-between gap-3 transition ${
                       isSelected
-                        ? 'bg-blue-50/80 text-blue-900 font-bold'
-                        : 'hover:bg-slate-50 text-slate-700'
+                        ? 'bg-blue-50 text-blue-900 font-bold'
+                        : 'hover:bg-slate-50 text-slate-800'
                     }`}
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs leading-snug">{unit.name}</div>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-500 font-medium">
+                      <div className="text-sm sm:text-base font-semibold leading-snug">{unit.name}</div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-semibold">
                           {unit.category}
                         </span>
                         {unit.code && (
-                          <span className="text-[9px] font-mono text-slate-400">
+                          <span className="text-xs font-mono text-slate-400">
                             {unit.code}
                           </span>
                         )}
                       </div>
                     </div>
-                    {isSelected && <Check className="w-4 h-4 text-blue-600 shrink-0" />}
+                    {isSelected && <Check className="w-5 h-5 text-blue-600 shrink-0" />}
                   </button>
                 );
               })
